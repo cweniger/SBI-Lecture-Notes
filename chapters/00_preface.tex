@@ -1,0 +1,65 @@
+\chapter*{Introduction and Preface}
+
+%\section*{Introduction and Preface}
+
+\emph{These lecture notes grew from my experience of repeatedly hitting the wall with traditional and modern likelihood-based inference techniques, and from a conviction that simulation-based inference offers a path to solve some of the most central scientific analysis challenges we face today. The prospect of unearthing knowledge from complex observations, of faithfully connecting theory with data in ways previously beyond reach, of unraveling the un-unravelable, feels like a form of scientific magic. We are still far from realizing SBI's full potential. What follows is an attempt to equip students entering the field with the theoretical scaffolding to reason systematically about this rapidly evolving frontier, bridging the machine learning literature with the physical sciences.}
+
+
+\subsection*{Motivation}
+
+The interpretation of a wide range of observations—from \textcolor{red}{TODO-ADD-APPLICATIONS (e.g., gravitational wave signals, particle collision events, neural population recordings, epidemic trajectories, climate patterns)}—relies on increasingly complex simulations. These simulators encode our understanding of physical, biological, or observational processes, but traditional inference methods often hit computational barriers when confronted with intractable likelihoods due to complex marginalization over latent variables, expensive, slow, or inaccurate simulation models, and high-dimensional parameter and data spaces that make MCMC prohibitively costly.
+
+Simulation-based inference (SBI) offers a promising alternative: by training neural networks on simulated data, we can identify relevant patterns and learn to perform statistical inference directly from simulations, bypassing the need for explicit likelihood evaluation and integration. SBI is a quickly developing research field with many early successes \textcolor{red}{TODO-ADD-SPECIFIC-EXAMPLES}. It is likely that SBI will play a significant role in a wide range of analysis tasks across the sciences in the years to come.
+
+\subsection*{Scope and Approach}
+
+These notes are not a practical quick-start tutorial for implementing SBI pipelines.\footnote{Excellent practical introductions can be found in \textcolor{red}{TODO-ADD-TUTORIAL-RESOURCES (e.g., the \texttt{sbi} package documentation, \ldots)}} Instead, they aim to help students develop the \textbf{theoretical scaffolding} necessary for \textbf{structured reasoning} about SBI opportunities and pitfalls. 
+
+We cover foundational aspects of classical simulation-based inference and ABC; data summaries and information-theoretic principles; core neural SBI methods (NPE, NLE, NRE); an extensive treatment of diagnostic and validation methods; and advanced topics including inference under model misspecification.
+
+The research field is new and somewhat scattered across different communities. We attempt to provide conceptual structure by carefully exposing connections and differences between methods. Key unifying perspectives introduced in these notes include a taxonomy of epistemic uncertainties (Type A: model misspecification; Type B: lossy compression; Type C: inexact inference) that clarifies failure modes and guides diagnostic strategy; a generalized rank diagnostics framework that reveals the common structure underlying seemingly disparate validation approaches; and an information-theoretic approach to robust summary learning that formalizes invariance principles for handling simulator uncertainty. These represent both pedagogical synthesis and new conceptual contributions aimed at bringing coherence to the field.
+
+\textbf{Assumed background:} Familiarity with Bayesian inference, basic probability theory, and standard machine learning concepts (neural networks, gradient descent, optimization). We introduce information-theoretic concepts as needed.
+
+\subsection*{Structure}
+
+\begin{description}
+\item[Section 1 (Foundations)] establishes the conceptual groundwork, contrasting simulation-based and likelihood-based inference, introducing ABC, and developing information-theoretic perspectives on data compression and summary statistics.
+
+\item[Section 2 (Neural Methods)] presents the main algorithmic approaches—NPE, NLE, and NRE—emphasizing their information-theoretic interpretations, architectural requirements, and practical trade-offs.
+
+\item[Section 3 (Diagnostics)] provides an extensive treatment of validation methods organized around the taxonomy of epistemic uncertainties. We discuss reference posterior comparisons, forward-backward diagnostics (SBC, coverage tests, C2ST), model-based rank diagnostics, and model misspecification tests.
+
+\item[Section 4 (Advanced Topics)] explores robust inference under simulator uncertainty, formalizing asymptotic notions of robustness and presenting strategies for learning invariant summaries.
+
+\item[Section 5 (Concluding Remarks)] offers perspective on the future of the field and additional resources.
+\end{description}
+
+\subsection*{Acknowledgments}
+
+An early version of these lectures was delivered at the Theoretical Advanced Study Institute (TASI) in May 2024. I thank the organizers for the invitation and the students for their engagement, excellent questions and feedback throughout the school.
+
+I am furthermore grateful to 
+James Alvey,
+Noemi Anau Montel,
+Patrick Forre,
+Guillermo Franco Abellan,
+Mathis Gerdes,
+Will Handley,
+Konstantin Karchev,
+Huifang Lyu,
+Benjamin Miller,
+Joy Sanghavi,
+Oleg Savchenko,
+Ayman Stitou,
+Roberto Trotta,
+\cw{TODO: Check list, mention family and GRAPPA}
+for numerous discussions and collaborations that have shaped my thinking about simulation-based inference over the years.
+
+These notes are pedagogical rather than comprehensive. References are selective, chosen to illustrate concepts or provide entry points to the literature, rather than to exhaustively survey the field. I apologize to the many researchers whose important contributions are not cited—this reflects constraints of scope rather than judgments of significance. The field is evolving rapidly, and these notes represent a snapshot of methods and perspectives as of 2024--2025. We plan to extend and update them as the field develops.
+
+\vfill
+{\subsection*{Note on AI Assistance}
+
+Large language models (in particular Claude by Anthropic and ChatGPT by OpenAI) played a significant role in developing these lecture notes through a human-AI collaborative writing process. I used LLMs as tools for structuring material, refining exposition, generating example codes and figures, condensing text, identifying optimal formulations, LaTeX formatting, and as a sparring partner for clarifying and questioning concepts.  All scientific perspectives, conceptual frameworks, synthesis decisions and pedagogical choices reflect my own understanding and judgment---both about the science and about what approaches will best serve our research field moving forward. 
+}

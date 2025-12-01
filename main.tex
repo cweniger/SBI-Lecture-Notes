@@ -1,0 +1,177 @@
+\documentclass[a4paper, 12pt, titlepage=false]{scrreprt}
+% ============================================================================
+% ENCODING AND FONTS
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage{libertinus}
+
+% ============================================================================
+% GRAPHICS AND FIGURES
+% ============================================================================
+\usepackage{graphicx}
+
+% ============================================================================
+% MATHEMATICS
+% ============================================================================
+\usepackage{mathtools}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{bbold}
+\usepackage{MnSymbol}
+
+% Figure numbering (requires amsmath)
+\numberwithin{figure}{section}
+
+% Math operators
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+% Theorem environments
+\newtheorem{theorem}{Theorem}
+
+% ============================================================================
+% TABLES AND FORMATTING
+% ============================================================================
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{rotating}
+\usepackage{cancel}
+
+% ============================================================================
+% PAGE LAYOUT
+% ============================================================================
+\usepackage{geometry}
+\usepackage{marginnote}
+
+% ============================================================================
+% SECTION NUMBERING
+% ============================================================================
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% ============================================================================
+% COLORS AND BOXES
+% ============================================================================
+\usepackage[most]{tcolorbox}
+
+\tcbset{
+  inlinebox/.style={
+    colback=gray!3!white,
+    colframe=gray!70!black,
+    boxrule=0.4pt,
+    arc=2mm,
+    left=4pt,
+    right=4pt,
+    top=4pt,
+    bottom=4pt,
+    enhanced,
+    boxsep=2pt
+  }
+}
+
+% ============================================================================
+% ALGORITHMS
+% ============================================================================
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% ============================================================================
+% ICONS AND SYMBOLS
+% ============================================================================
+\usepackage{fontawesome}
+
+% ============================================================================
+% HYPERLINKS AND REFERENCES
+% ============================================================================
+\usepackage[
+    colorlinks=true,
+    linkcolor=blue!50!black,
+    citecolor=blue!50!black,
+    urlcolor=blue!70!black,
+]{hyperref}
+
+% ============================================================================
+% BIBLIOGRAPHY
+% ============================================================================
+\usepackage[authoryear]{natbib}
+\setcitestyle{round}
+
+% ============================================================================
+% CUSTOM COMMANDS - TEXT
+% ============================================================================
+\newcommand{\fex}{\textit{e.g.,}}
+\newcommand{\cw}[1]{{{\scriptsize\color{red} (CW: #1)}}}
+
+% ============================================================================
+% CUSTOM COMMANDS - VECTORS AND MATRICES
+% ============================================================================
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bxobs}{{\mathbf{x}_\text{obs}}}
+\newcommand{\bxnew}{{\mathbf{x}_\text{new}}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bz}{\mathbf{z}}
+\newcommand{\bs}{\mathbf{s}}
+\newcommand{\bt}{\mathbf{t}}
+\newcommand{\bT}{\mathbf{T}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bv}{\mathbf{v}}
+\newcommand{\bw}{\mathbf{w}}
+\newcommand{\bn}{\boldsymbol{n}}
+
+% ============================================================================
+% CUSTOM COMMANDS - GREEK LETTERS
+% ============================================================================
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\newcommand{\boldeta}{\boldsymbol{\eta}}
+\newcommand{\bepsilon}{\boldsymbol{\epsilon}}
+\newcommand{\bmu}{\boldsymbol{\mu}}
+\newcommand{\bphi}{\boldsymbol{\phi}}
+\newcommand{\bvarphi}{\boldsymbol{\varphi}}
+\newcommand{\bpsi}{\boldsymbol{\psi}}
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\newcommand{\blambda}{\boldsymbol{\lambda}}
+\newcommand{\bgamma}{\boldsymbol{\gamma}}
+\newcommand{\bPhi}{{\boldsymbol{\Phi}}}
+
+% ============================================================================
+% CUSTOM COMMANDS - SPECIAL SYMBOLS
+% ============================================================================
+\newcommand{\bbE}{{\mathbb{E}}}
+\newcommand{\bbR}{{\mathbb{R}}}
+\newcommand{\iidsim}{\overset{\text{i.i.d.}}{\sim}}
+
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+\title{TASI Lectures on Structured Reasoning for Simulation-Based Inference\footnote{Extended version of TASI lectures from May 2024.}}
+\author{Christoph Weniger (University of Amsterdam)}
+\date{\today}
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+These lecture notes provide a structured overview of simulation-based inference (SBI), with a focus on neural methods for posterior, likelihood, and ratio estimation. Particular attention is given to the role of data summaries, inference diagnostics, and validation strategies. A key conceptual contribution is the introduction of a taxonomy of epistemic uncertainties—lossy compression, inference approximation, and model misspecification—that helps clarify failure modes and guide method development. Core methods such as NPE, NLE, and NRE are introduced from both algorithmic and information-theoretic perspectives. The material emphasizes practical reasoning over formal generality, aiming to equip researchers with a clear framework for building and troubleshooting SBI pipelines in complex scientific applications.
+\end{abstract}
+
+\input{chapters/00_preface}
+
+\tableofcontents
+
+\input{chapters/01_foundations}
+\input{chapters/02_methods}
+\input{chapters/03_diagnostics}
+\input{chapters/04_advanced}
+\input{chapters/05_conclusions}
+
+%\appendix
+%\include{appendix.tex}
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

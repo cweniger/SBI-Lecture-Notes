@@ -1,0 +1,258 @@
+\section{Finite-data effects and variance analysis}
+
+%\cw{TODOREF - Finite sample size}
+
+\subsection{Hessian-based uncertainty analysis}
+
+The convergence arguments in Sec.~\ref{sec:methods} relied on the large training data limit, $N \to \infty$, where sums over training data samples can are replaced by integrals over generative model parameters and observations (see for instance Eqs.~\eqref{eqn:NPE_loss} and~\eqref{eqn:NPE_limit}).  Furthermore, we assumed that networks are expressive enough to mathematically represent the minimum of the loss function. However, in many applications, one only has a limited amount of training data available, depending on simulation and storage costs.  Unfortunately, predicting the performance of models and algorithms in situations with limited training data and network capacity is generally challenging. Still, some basic insights can be obtained mathematically by considering the sample variance of the loss function.
+
+\paragraph{General analysis.}
+SBI training losses functions, like Eqs.~\eqref{eqn:NPE_loss} or \eqref{eqn:NRE_loss}\footnote{With an additional sum over $|\mathcal{D}_c|$.}, can be generally written in the form
+%
+\begin{equation}
+\label{eqn:general_training_loss}
+\mathcal{L}_{\mathcal D}[q] = \frac1{N} \sum_{\bx, \btheta \in \mathcal{D}} \ell_q(\bx, \btheta)\;.
+\end{equation}
+%
+We made here explicit that the loss function depends, besides on the network weights $\phi$, also on the specific training data realization $\mathcal{D}$.\footnote{Note that we sum here over \emph{all} available training data, $\mathcal{D}$. The usual sub-sampling or mini-batching during training with stochastic gradient descent introduces additional noise. We are here, however, only interested in effects on the loss function after sub-sampling related variations are averaged out. 
+This corresponds to the end-phase of training with small learning rate.}
+%As discussed in Sec.~\ref{sec:methods}, 
+Training data is generated as $N$ i.i.d.~samples from the generative model.
+It is then straightforward to show that the mean of the loss function is given by 
+$\bbE_{\mathcal D}[\mathcal L[\mathcal D, \bphi]] = \bbE_{p(\bx, \btheta)}[\ell_{\bphi}(\bx, \btheta)]$,
+and that its variance is given by
+$\text{Var}_{\mathcal D}[\mathcal L[\mathcal D, \bphi]] = \frac{1}{N}\text{Var}_{p(\bx, \btheta)}[\ell_{\bphi}(\bx, \btheta)]$. The variance scales like $1/N$ with training data size, as expected from the variance reduction properties of averaging.
+
+To study the impact of the variance on the loss minimum, we expand the loss function at second order in the deviations $\bepsilon$, around its large-sample minimizer $\bphi$.
+%
+$$
+q_{\balpha}(\btheta \mid \bx) = q_0(\btheta \mid \bx)
+\cdot \exp\left(1+\sum_{i=1}^K \alpha_i \delta_i(\btheta, \bx) \right)
+$$
+We can then investivate the loss function value as function of $\balpha$
+$$
+\mathcal{L}_{\mathcal D}[\balpha] \equiv
+\mathcal{L}_{\mathcal D}\left[q_{\balpha}(\btheta \mid \bx)\right]
+$$
+Second order Talor expansion leads to 
+$$
+\mathcal{L}_{\mathcal D}[\balpha]
+\approx
+\mathcal{L}_{\mathcal D}[0]
++ \balpha^T  
+\underbrace{\left.\nabla_{\balpha} \mathcal{L}_{\mathcal{D}} \right|_{\balpha = 0}}_{\equiv \mathbf g}
++ \frac12 
+\balpha^T  
+\underbrace{\left.(\nabla^2_{\balpha} \mathcal{L}_{\mathcal D})\right|_{\balpha = 0}}_{\equiv \mathbf H}
+\balpha
+$$
+where we introduce gradient and Hessian.
+
+We can trivially minimize that function, for a given dataset $\mathcal{D}$, and find
+$$
+\balpha^\ast \equiv  \argmin_{\balpha} \mathcal{L}_{\mathcal D}[\balpha] =  - {\mathbf H}^{-1} \mathbf g
+$$
+
+To lowest order, we can then estimate the dataset related variance of the minimiser to be
+$$
+\text{Cov}_{\mathcal D}[\balpha^\ast] \approx
+\bbE_{\mathcal D}[{\mathbf H}]^{-1}\cdot
+\text{Cov}_\mathcal{D}[\mathbf g]
+\cdot \bbE_\mathcal{D}[{\mathbf H}]^{-1}
+$$
+
+Any set of functions $\delta_i(\btheta, \bx)$ spans a linear space. The standard normal modes are defined to span the same space, but with a unit covariance matrix for $\text{Cov}_{\mathcal D}[\balpha^\ast] = \mathbb 1$.
+Such normal modes can be called $\delta_i$.
+
+
+\paragraph{Neural posterior estimation.} 
+For NPE, we find
+$$
+\text{Cov}[\balpha] = \frac1N\int d\btheta\, d\bx\, p(\bx, \btheta)
+\delta_i(\btheta, \bx)
+\delta_j(\btheta, \bx)
+%\frac{q_i(\btheta \mid \bx)}{q_0(\btheta \mid \bx)}
+%\frac{q_j(\btheta \mid \bx)}{q_0(\btheta \mid \bx)}
+$$
+
+In order to proceed, we make a simple ansatz that the modes have the form. For any set of basis functions $e_i(\btheta, \bx)$, we can find that $q_i$ lead to a unit variate 
+$$
+\delta_i(\btheta , \bx) = 
+\frac{e_i(\btheta, \bx)}{\sqrt{p(\bx, \btheta)}}
+$$
+for which the $\balpha^\ast$ covariance becomes the unit matrix.
+
+We define state density
+$$
+\rho(\bx, \btheta) \equiv \sum_i e_i^2(\bx, \btheta)
+= \frac{1}{\mathcal V_{\rm eff}(\bx, \btheta)}
+$$
+Then the deviation
+$$
+\delta q(\btheta \mid \bx) = \sum_{i=1}^K \alpha_i \delta_i(\btheta, \bx) q_0(\btheta \mid \bx)
+$$
+has a point-wise variance that we can estimate as
+$$
+\text{Cov}_\mathcal{D}
+\left[\frac{\delta q(\btheta \mid \bx)}{q_0(\btheta \mid \bx)}\right]
+=
+\frac{\rho(\bx, \btheta)} {p(\bx, \btheta) N}
+=
+\frac{1} {p(\bx, \btheta) N \mathcal V_{eff}(\btheta, \bx)}
+$$
+
+Few relevant observations...
+
+\paragraph{Neural ratio estimation.}
+For NRE we find instead
+
+$$
+\text{Cov}_\mathcal{D}k\left[\frac{\delta q(\btheta \mid \bx)}{q_0(\btheta \mid \bx)}\right]
+=
+\frac{\rho(\bx, \btheta)} {\min(p(\bx, \btheta), p(\bx) p(\btheta)) N}
+$$
+
+
+\subsection{Noise resampling}
+
+
+
+%For $M\to \infty$, second term vanishes. Only variations where 
+%$\delta q(\btheta \mid \bx) \approx \delta h(\btheta) p(\btheta \mid \bx)$ is not varying much with $\bx$ matter.
+
+%Each term in Eq.~\eqref{eqn:general_training_loss} has hence the variance $\text{Var}_{p(\bx, \btheta)}[\ell_\phi(\bx, \btheta)]$. 
+%Given that training examples are drawn independently, standard variance scaling arguments yield then that the total variance of the training loss,
+%
+%\begin{equation}
+%\text{Var}_{p(\mathcal{D})} [\mathcal{L}[\mathcal D, \phi]]
+% = \frac1{|\mathcal D|} \text{Var}_{p(\bx, \btheta)} [\mathcal{\ell}_\phi(\bx, \btheta)]\;.
+%\label{eqn:loss_var}
+%\end{equation}
+%\begin{equation}
+%\text{Var}_{p(\mathcal{D})} [\nabla_\phi\mathcal{L}[\mathcal D, \phi]]
+% = \frac1{|\mathcal D|} \text{Var}_{p(\bx, \btheta)} [\nabla_\phi\mathcal{\ell}_\phi(\bx, \btheta)]
+%\label{eqn:loss_var}
+%\end{equation}
+%
+%
+%\begin{equation}
+%\text{Var}_{p(q)p(\mathcal{D})} [\mathcal{L}[\mathcal D, \phi]]
+%= 
+%\bbE_{p(q)}\text{Var}_{p(\mathcal{D})} [\mathcal{L}[\mathcal D, \phi]]
+%+ \text{Var}_{p(q)}\bbE_{p(\mathcal{D})} [\mathcal{L}[\mathcal D, \phi]]
+%\end{equation}
+%%
+%As expected, the sample variance related to finite training data vanishes in the large sample limit, $|\mathcal{D}| \to \infty$.
+%%
+%In the subsequent discussion, and in the interest of clarity, we will consider the NPE loss, where $\ell(\bx, \btheta) = -\log q_\phi(\btheta \mid \bx)$. 
+
+%However, analogous arguments can be made for all other SBI algorithms that we discussed in Sec.~\ref{sec:core}.
+
+%For a single training sample, $N=1$, randomly drawn from $p(\bx, \btheta)$, the variance would be $\text{Var}_{p(\bx, \btheta)}[-\log q_\phi(\btheta \mid  \bx)]$ (it is $1/2$ in the Gaussian case).  For the $N$ i.i.d.~samples that contribute to $\mathcal{L}$, we instead obtain
+%%
+%$$
+%\text{Var}_{p(\bx, \btheta)}[\mathcal{L}_\text{NPE}] = 
+%\frac1N
+%\text{Var}_{p(\bx, \btheta)}[
+%%\mathcal{\ell}(\bx, \btheta)
+%-\log q_\phi(\btheta \mid \bx)
+%]
+%\overset{N\to\infty}{\to}0
+%\;.
+%$$
+%As expected, the sample variance of $\mathcal{L}_\text{NPE}$, and derived quantities like gradients for stochastic gradient descent, vanishes in the large $N$ limit.
+
+Simulation models often have a modular or hierarchical form, with some computationally slow and some fast components. In these situations, SBI performance can be benefit from running the fast parts of the simulator more often than the slow parts when generating training data.
+
+As an example, let us consider a simple hierarchical simulation model,
+%
+$$
+p(\mathbf x \mid \btheta)
+= \int d\blambda\; 
+\underbrace{p(\mathbf x \mid \blambda)}_{\text{(a) Fast}}
+\underbrace{p(\blambda \mid \btheta)}_\text{(b) Slow }\;.
+$$
+%
+Here, $\btheta$ represents model parameters, $\blambda$ are (stochastic or deterministic) model predictions, and $\bx$ is simulated data.  Generating model predictions $\blambda \sim p(\blambda \mid \btheta)$ given model parameters $\btheta$ can be computationally very costly and slow, because it might involve running a physics simulation code. On the other hand, generating simulation data $\bx \sim p(\bx \mid \blambda)$ for a given model prediction $\blambda$ can be very fast, because it might just amounts to adding measurement noise that can be quickly sampled, $\bx = \blambda + \textbf n$.
+It makes then sense to store $\blambda$ and re-sample $\bx$ on the fly during training.
+
+%where some components are fast to calculate and sample (for instance, adding Gaussian measurement noise to a model prediction), and other components are slow (for instance, running a physics simulation code to obtain said model prediction). 
+
+The empirical distribution of the finite training data has an atomic structure and is defined as a sum over delta functions,
+$$
+p_N(\bx, \btheta) = \frac1N\sum_{i=1}^N \delta(\bx - \bx_i) \delta(\btheta - \btheta_i)\;.
+$$
+The resampling distribution, on the other hand, has clouds of $\bx_{i, j} \sim p(\bx \mid \btheta_i)$ samples associated to each sample $\btheta_i \sim p(\btheta)$,
+%$$
+%p_r(\bx, \btheta) = \frac1N\sum_{i=1}^N 
+%p(\bx \mid \blambda_i, \btheta_i) \delta(\btheta - \btheta_i)\;,
+%$$
+$$
+p_r(\bx, \btheta) =
+\frac1N\sum_{i=1}^N 
+\left(\frac1M\sum_{j=1}^M
+\delta(\bx - \bx_{i,j})\right)
+\delta(\btheta - \btheta_i)
+\;,
+$$
+where $N$ is the number of parameter samples, and $M$ the number of data samples per parameter sample.
+This brings the empirical training data distribution much closer to the true generative model distribution $p(\bx, \btheta)$.
+%which brings it closer to the true distribution $p(\bx, \btheta)$.
+Examples for this are shown in Fig.~\ref{fig:resampling_examples}.
+
+\medskip
+
+One can use the law of total variance to show that for the above empirical resampling distribution, the variance of the gradient can be computed as
+$$
+\text{Cov}_{\mathcal D}[\mathbf g[\mathcal D]]
+= 
+\frac1N \left[
+\text{Cov}_{p(\btheta)}
+\bbE_{p(\bx \mid \btheta)}
+\left[\nabla_{\bphi}\ell_\phi(\bx, \btheta)\right]
++\frac1M 
+\bbE_{p(\btheta)}
+\text{Cov}_{p(\bx \mid \btheta)}\left[\nabla_{\bphi}\ell_\phi(\bx, \btheta)\right]
+\right]\;.
+$$
+In the case without resampling, $M=1$, we obtain the results quoted above, while in the limit of online resampling, $M\to \infty$, only the first term contributes to the gradient variance.
+
+The following expression follows from a second-order perturbative expansion around the loss minimum, combined with a variance decomposition across hierarchical data structure.
+$$
+\text{Cov}_\mathcal{D}
+\left[\frac{\delta q(\btheta \mid \bx)}{q_0(\btheta \mid \bx)}\right]
+\approx
+\frac1N \left(
+\frac{\int d\bx \rho(\bx, \btheta)} {p(\btheta)}
++ \frac1M\frac{\rho(\bx, \btheta)} {p(\btheta , \bx)}
+\right)
+$$
+
+
+In the case of NPE, the first term depends on the data average $\bbE_{p(\bx \mid \btheta)}[\delta q(\btheta \mid \bx)/p(\btheta \mid \bx)]$ w.r.t.~$\btheta$. 
+%Fluctuations with a ratio $\delta q(\btheta \mid \bx)/p(\btheta \mid \bx)$ is approximately constant w.r.t.~$\bx$ are the most relevant, while the $\bx$ dependence of $\delta q(\btheta \mid \bx)$ is not affected by 
+As a consequence, in the online resampling limit, $M\to \infty$,
+uncertainties in the $\bx$ direction of $q_\phi(\btheta \mid \bx)$ expected to be heavily suppressed, and the fitted posterior is expected to be dominated by uncertainties of the form $q_\phi(\btheta \mid \bx) \approx (1+\delta(\btheta)) p(\btheta \mid \bx)$. Even for small relatively small $N$, this strongly constraints the optimisation problem.
+
+%\medskip
+%
+%We can estimate the finite sample size-induced variance of the NPE loss function, $\mathcal{L}_\text{NPE} \equiv \mathbb E_{p(\bx, \btheta)}\left[-\log q_\phi(\btheta \mid \bx)\right]$, assuming that we have $N$ samples from $\blambda$ and $\btheta$, and $M$ samples of $\bx$ for each $\blambda$ and $\btheta$ pairs,
+%%
+%$$
+%\text{Var}\left[\mathcal{L}_\text{NPE}\right]
+%=
+%\frac1N
+%\left[
+%\frac1M
+%\mathbb E_{p(\btheta)}
+%\text{Var}_{p(\bx \mid \btheta)}[-\log q_\phi(\btheta \mid \bx)]
+%+
+%\text{Var}_{p(\btheta)}
+%\mathbb E_{p(\bx \mid \btheta)}
+%[-\log q_\phi(\btheta \mid \bx)]
+%\right]
+%$$
+%
+%The first term corresponds to the variance induced by varying $\bx$ for a given $\btheta$, while the second term corresponds to the variance induced by different values of the loss function for across different $\btheta$.
+
+\cw{FIGTODO Optional figures: Show uncertainties in training in the tails, and qualitatively compare with estimates}

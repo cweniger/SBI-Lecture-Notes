@@ -1,0 +1,474 @@
+%\chapter{Derivations and further discussions}
+%
+%\section{Neural posterior estimation and entropy}
+%
+%We explicitly derive here Eq.~\eqref{eqn:NPE_limit} in Sec.~\ref{sec:NPE}. To this end, we apply the large sample limit, $N\to \infty$, refactor some of the expressions, and exploit the definitions of the KL-divergence and the differential entropy.
+%
+%\begin{multline}
+%\mathcal{L}_\text{NPE} = - \frac1{|\mathcal{D}|}
+%\sum_{\btheta, \bx \in \mathcal{D}} \ln q_\phi(\btheta \mid \bx)
+%\\
+%\underset{N\to\infty}{\to}
+%- 
+%\int d\btheta\,d\bx\; p(\btheta, \bx) \ln q_\phi(\btheta \mid \bx)
+%\hfill\text{Large sample limit}
+%\\
+%= - \int d\btheta\,d\bx\; p(\btheta \mid \bx) p(\bx) \ln q_\phi(\btheta \mid \bx)
+%\hfill\text{Conditional probability}
+%\\
+%=
+%\int d\bx\, p(\bx) \, \left[
+%\int d\btheta\; p(\btheta \mid \bx) \ln 
+%\frac
+%{p(\btheta \mid \bx)}
+%{q_\phi(\btheta \mid \bx)}
+%- 
+%\int d\btheta\; p(\btheta \mid  \bx) \ln 
+%p(\btheta \mid \bx)
+%\right]\hfill\text{Refactoring}
+%\\
+%= \mathbb{E}_{p(\bx)}
+%\left[
+%D_{KL}\left(p(\btheta \mid \bx) \mid\mid q_\phi(\btheta \mid \bx) \right)
+%+ \mathcal{H}(p(\btheta \mid \bx))
+%\right]
+%\hfill\text{Using definitions}
+%\label{eqn:NPE_connection}
+%\end{multline}
+%
+%\section{Derivation of NRE}
+%
+%To derive a loss function with the above target, let us first consider a general binary cross-entropy loss function, which just follows from the forward KL divergence
+%%
+%\begin{equation}
+%    \mathcal L =  - \mathbb E_{p(\mathbf v \mid y)p(y)} [\ln q_\phi(y \mid \mathbf v)]
+%\end{equation}
+%%
+%We could interpret this as a discrete posterior challenge. Now we replace $\mathbf v$ with $(\mathbf x, \mathbf z)$ and define the generative model
+%\begin{equation}
+%    p(\mathbf v \mid y) = 
+%    \delta_{y1} p(\mathbf x \mid \mathbf z) p(\mathbf z)
+%    + \delta_{y0} p(\mathbf x) p(\mathbf z)
+%    \label{eqn:AuxModel}
+%\end{equation}
+%where $\delta_{ij}$ denotes here the Kronecker delta (with $\delta_{ij} = 1$ for $i=j$ and $\delta_{ij}=0$ otherwise).
+%%
+%The final loss function acquires then the form
+%\begin{equation}
+%    \mathcal L =  
+%    - \mathbb E_{p(\mathbf x \mid z)p(\mathbf z)} [\ln \sigma (f_\phi(\mathbf x, \mathbf z)]
+%    - \mathbb E_{p(\mathbf x)p(\mathbf z)} [\ln \sigma (-f_\phi(\mathbf x, \mathbf z)]
+%\end{equation}
+%%
+%One can show now that the function is minimized by
+%\begin{equation}
+%    f_\phi(\mathbf x, \mathbf z)\approx
+%    \ln \frac{p(\mathbf x, \mathbf z)}{p(\mathbf x)p(\mathbf z)}
+%    = \ln \frac{p(\mathbf x \mid \mathbf z)}{p(\mathbf x)}
+%    = \ln \frac{p(\mathbf z\mid \mathbf x)}{p(\mathbf z)}
+%\end{equation}
+%%
+%where the last two expressions are just an application of conditional probabilities.  Depending on the choice of probability distributions in Eq.~\eqref{eqn:AuxModel}, other density ratios (like log-likelihood-ratios) could be learned as well.  Not that here $f_\phi(\mathbf x, \mathbf z)$ is just a real-valued neural network without any additional constraints.
+
+
+\section{Interpretation of JS-divergence}
+
+What does a large JS-divergence signify? To see this, we consider the average Bayesian probability of error of wrongly classifying a parameter-data pair as drawn from the prior or the posterior, which is given by
+%
+\begin{equation}
+    \hat P_e = \mathbb{E}_{\bx \sim p(\bx)} \left[\frac12 \min(p(\bz|\bx), p(\bz))\right]
+\end{equation}
+%
+In Ref.~\cite{XYZ} it was shown that the minimum of the NRE loss provides an upper bound on the error rate,
+%
+\begin{equation}
+    \hat P_e
+    \leq
+    2\log 2 -  
+    2 \mathbb{E}_{\bx\sim p(\bx)}\left[D_{JS} ( p(\bz|\bx) \;||\; p(\bz))\right]
+    \leq \ell_{NRE}[F_\phi]\;.
+\end{equation}
+
+When using NRE as described above, the summary is optimized such that it minimizes (an upper bound on) the error rate when classifying points as drawn from the prior vs. drawn from the posterior, or (equivalently) whether the likelihood-to-evidence ratio is larger or smaller than one,
+%
+\begin{equation}
+    \frac{p(T(\bx) | \btheta)}{p(T(\bx))}  = 
+    \frac{p(\btheta| T(\bx))}{p(\btheta)} 
+    \lessgtr 1\;.
+\end{equation}
+
+\begin{equation}
+\ell[f_\phi] = 
+-2 \mathbb{E}_{p(\bx)}\left[
+\text{JSD}(p(\btheta|\by = F(\bx)) || p(\btheta))
+\right]
+\end{equation}
+
+
+
+\section{Loss function sensitivity analysis}
+
+Let us consider a flexible function $q^\text{NPE}_\phi(\btheta|\bx)$ that we assume to be by construction non-negative and normalized to one, $\int d\btheta \,q^\text{NPE}_\phi(\btheta|\bx)=1$, for all values of $\phi$ (an example are normalizing flows).  Consider now the loss function
+%
+\begin{equation}
+    \ell_{NPE}[q^\text{NPE}_\phi] = - \int d\bx\,d\btheta\,p(\bx, \btheta) \log q^\text{NPE}_\phi(\btheta|\bx)\;.
+\end{equation}
+%
+Using Jensen's inequality and the fact that the log is a concave function, one can show that this function is minimized when
+%
+\begin{equation}
+    q^\text{NPE}_\phi(\btheta|\bx) \approx p(\btheta|\bx)\;,
+\end{equation}
+and hence our normalized density will approximate the posterior. If we use the same loss function for $q_\phi(\bx|\btheta)$
+%
+\begin{equation}
+    \ell_{NLE}[q^\text{NLE}_\phi] = - \int d\bx\,d\btheta\,p(\btheta, \bx) \log q_\phi(\btheta|\bx)\;.
+\end{equation}
+%
+we instead find that it is minimized by
+%
+\begin{equation}
+    q^\text{NLE}_\phi(\bx|\btheta) \approx p(\bx|\btheta)\;.
+\end{equation}
+
+
+\paragraph{Theoretical sensitivity analysis.}
+
+We can now expand around the minimum up to second order in $\Delta q(\btheta |\bx) \equiv q(\btheta|\bx) - p(\btheta|\bx)$.  This leads to 
+%
+\begin{equation}
+    \ell_{NRE} \simeq 2\log 2 - 
+    2 \mathbb{E}_{p(\bx)}[\text{JSD} ( p(\btheta|\bx) || p(\btheta)]
+  + \frac12 \mathbb{E}_{p(\bx)} \left[
+    \int d\btheta\,
+    \frac{p(\btheta) p(\btheta|\bx)}{p(\btheta) + p(\btheta|\bx)}
+    \cdot \left( \frac{\Delta q(\btheta|\bx)}{p(\btheta|\bx)}\right)^2
+    \right]
+\end{equation}
+%
+and
+%
+\begin{equation}
+  \ell_{NPE} \simeq \mathbb{E}_{p(\bx)} [H(p(\btheta|\bx))]
+  + \frac12 \mathbb{E}_{p(\bx)} \left[
+  \int d\btheta \, 
+  p(\btheta|\bx)
+    \cdot \left( \frac{\Delta q(\btheta|\bx)}{p(\btheta|\bx)}\right)^2
+    \right]
+\end{equation}
+%
+and
+%
+\begin{equation}
+  \ell_{NLE} \simeq \mathbb{E}_{p(\btheta)} [H(p(\bx|\btheta))]
+  + \frac12 \mathbb{E}_{p(\btheta)} \left[
+  \int d\bx\, 
+  p(\bx|\btheta)
+    \cdot \left(\frac{\Delta q(\bx|\btheta)}{p(\bx|\btheta)}\right)^2
+    \right]
+\end{equation}
+
+
+
+
+\begin{figure}
+\centering
+\begin{tikzpicture}
+  % Nodes
+  \node[latent] (x) at (0,0) {$x$};
+  \node[latent] (y) at (2,0) {$y_i$};
+  \node[obs] (z) at (4,0) {$z$};
+
+  % Edges
+  \edge {x} {y};
+  \edge {y} {z};
+
+  % Plate
+  \plate {plate1} {(y)(z)} {$N$} ;
+
+  % Labels
+%  \node[below of=plate1.south, node distance=0.5cm] {Instances of $y_i$ for $i=1,\ldots,N$};
+
+\end{tikzpicture}
+\caption{This is a test caption}
+\end{figure}
+
+
+
+
+%\chapter{Information theory basics}
+%
+%
+%\section{Score function and Fisher information} 
+%
+%In the context of \textit{general probabilistic modeling}, the \textit{score function} of a probability density function $p(\mathbf v)$ is defined as the gradient of the log probability,
+%%
+%\begin{equation}
+%    s(\mathbf v) \equiv 
+%    \nabla_{\mathbf v} \ln p(\mathbf v) 
+%    = \frac {\nabla_{\mathbf v} p(\mathbf v)}{p(\mathbf v)} 
+%    \;.
+%\end{equation}
+%%
+%The score function of a normal distribution, $\mathcal{N}(x; \mu, \sigma^2)$, is for instance $s(x) = \frac{x-\mu}{\sigma^2}$;  the score of an energy based model is $s(\mathbf v) = -E(\mathbf v)$.
+%
+%The above definition is prevalent in the machine learning literature.  However, in \textit{classical statistics}, the \textit{score function} has a slightly different meaning and specifically refers to the derivative of the log likelihood function w.r.t.~model parameters: $s(\mathbf z; \mathbf x) \equiv  \nabla_{\mathbf z} \ln p(\mathbf x\mid \mathbf z)$.
+%Note that here the derivative is not taken w.r.t.~the random variates of the distribution, but w.r.t.~the conditionals.
+%
+%The \textit{Fisher information} matrix~\cite{} is defined as the covariance matrix of the classical score function\footnote{One can show that the mean of the score function is zero.}
+%\begin{equation}
+%\mathcal{I}(\mathbf z) = 
+%\mathbb{E}_{\mathbf x \sim p(\mathbf x \mid \mathbf z)}
+%\left[ 
+%\mathbf s(\mathbf z; \mathbf x)^T
+%\mathbf s(\mathbf z; \mathbf x)
+%\right]
+%\end{equation}
+%
+%Let $\hat {\mathbf z}(\mathbf x)$ be any unbiased estimator of $\mathbf z$.  One can show that (Carmér-Rao bound)
+%%
+%\begin{equation}
+%    \text{Var}_{\mathbf x \sim p(\mathbf x \mid \mathbf z)}[\hat{\mathbf z}(\mathbf x)] \geq \mathcal{I}(\mathbf z)^{-1}\;.
+%\end{equation}
+%%
+%Hence, the Fisher information matrix provides a lower limit to the amount of information we can extract. 
+%\cw{Add references}
+%
+%
+%\section{Empirical distribution} Given some observational samples $\mathbf x^{(1:N)}$, we can also define the \textit{empirical distribution}
+%%
+%\begin{equation}
+%    q(\mathbf x) = \frac1N \sum_{i=1}^N 
+%    \delta_D(\mathbf x - \mathbf x^{(i)} )
+%\end{equation}
+%%
+%where we made use of the Dirac delta function $\delta_D$, which we will use frequently below. Averaging over the empirical distribution is equivalent to averaging over its samples
+%%
+%\begin{equation}
+%    \mathbb{E}_{q(\mathbf x)}[f(\mathbf x)]
+%    = \frac1N \sum_{i=1}^N f\left(\mathbf x^{(i)}\right)\;.
+%\end{equation}
+%%
+%
+%%\chapter{Divergence measures in probability theory}
+%
+%\begin{figure}[t]
+%    \centering
+%    \includegraphics[width=0.8\linewidth]{figures/divergences.png}
+%    \caption{Visualization of the integrants of Kullback-Leibler, Jensen-Shannon and Fisher divergences.}
+%    \label{fig:divergence_integrands}
+%\end{figure}
+%
+%In Fig.~\ref{fig:divergence_integrands} we visualize different divergence measures.
+%
+%\section{Kullback-Leibler divergence}
+%
+%The Kullback-Leibler (KL) divergence is defined as
+%%
+%\begin{equation}
+%    D_{KL}(q \mid \mid p) \equiv \mathbb{E}_{q(\mathbf v)} \left[ 
+%    \ln \frac {q(\mathbf v)}{p(\mathbf v)}  \right]\;.
+%\end{equation}
+%%
+%We see that $D_{KL}(q\mid\mid p) = 0$ if $q(\mathbf v) = p(\mathbf v)$.  It is
+%furthermore straightforward to show that the KL divergence is
+%non-negative, $D_{KL}(q\mid\mid p) \geq0$, for any probability density functions $q(\mathbf v)$ and $p(\mathbf v)$. We exploit that $\ln a \leq a-1$ with $a = p(\mathbf v)/q(\mathbf v)$ to write $D_{KL}(q \mid\mid p) \geq \int d\mathbf v \; q(\mathbf v)[p(\mathbf v)/q(\mathbf v) - 1] = \int d\mathbf v [p(\mathbf v) - q(\mathbf v)] = 1-1 = 0$.  We here only used that the probability densities are normalized.
+%
+%The KL divergence is not symmetric, which has consequences for its behaviour when using it as a fitting target.  
+%%
+%\begin{itemize}
+%    \item $D_{KL}(p \mid\mid q)$ is mass covering, meaning that $q$ typically spreads out to cover all regions where $p$ is non-zero.
+%    \item $D_{KL}(q \mid\mid p)$ is mode seeking, meaning that $q$ has the tendency to focus on a few or a single mode of $p$.
+%\end{itemize}
+%
+%
+%\section{Jensen-Shannon divergence} A common symmetrised version of the density function is the Jensen-Shannon (JS) divergence
+%%
+%\begin{equation}
+%   D_{JS}(q\mid\mid p) 
+%   \equiv \frac12 \left[D_{KL}(q\mid\mid m) + D_{KL}(p\mid\mid m)\right]\quad\text{with}
+%   \quad m(\mathbf v) \equiv  \frac12\left[q(\mathbf v) + p(\mathbf v)\right]
+%\end{equation}
+%%
+%which can be shown to be bound by $0\leq D_{JS}(q\mid\mid p) \leq \ln 2$ for the natural logarithm.  
+%% CHECK
+%
+%\section{Fisher divergence}
+%
+%Another useful divergence is the Fisher divergence, defined as
+%%
+%\begin{equation}
+%    D_F(q\mid\mid p) = \mathbb E_{q(\mathbf v)}
+%    \left[
+%    || 
+%    \nabla_{\mathbf v} \ln q(\mathbf v)
+%    - \nabla_{\mathbf v} \ln p(\mathbf v)
+%    ||^2
+%    \right]
+%\end{equation}
+%%
+%which in contrast to all above distributions does not depend on the distributions $q$ and $p$ being normalized. The reason is that the score is in general invariant under multiplying the probability density with a constant factorj.
+%%\ja{Does it require they are normalised to the same thing?}
+%
+%Interestingly, there is a relation (\textit{Bruijin’s identity}) which connects the Fisher and KL divergences,
+%%
+%\begin{equation}
+%\frac{d}{d t} D_{K L}\left(q_t(\tilde{\mathbf{v}}) \| p_{\boldsymbol{\theta}, t}(\tilde{\mathbf{v}})\right)=-\frac{1}{2} D_F\left(q_t(\tilde{\mathbf{v}}) \| p_{\boldsymbol{\theta}, t}(\tilde{\mathbf{v}})\right) .
+%\end{equation}
+%
+%Here, $q_t(\mathbf {\tilde v})$ and $p_t(\mathbf {\tilde v})$ denote smoothed versions of the original distributions,
+%resulting from adding Gaussian noise to $\mathbf v$ with variance $t$ 
+%($\mathbf {\tilde x}
+%\sim \mathcal{N}(\mathbf x, t\mathbf I$).
+%%CHECK \ja{Is this relation useful at all?}
+%\cw{Explain how this relates or motivates diffusion-based models.}
+%
+%
+%\section{Entropy.} We can define the (differential) entropy 
+%
+%%\ja{How much of this will you actually cover?} Quite a bit
+%%
+%\begin{equation}
+%    \mathcal{H}(p) = -\mathbb{E}_{p(\mathbf v)}
+%    \left[\ln p(\mathbf v)\right]
+%\end{equation}
+%\cw{Explain details about entropy}
+
+
+
+\chapter{Finite samples}
+
+The behavior of the loss minimiser in the large sample limit can be studied using standard statistical methods for M-estimators~\cite{M_estimators}. This neglects effects related to stochastic optimisation and neural network-specific regularisation, but still provides useful results. 
+%
+We start by Taylor expanding the loss function around the minimum, $\bphi$, in the large sample limit.  We keep terms up to second order in $\bepsilon$,
+%
+$$
+\mathcal{L}[\mathcal D, \bphi + \bepsilon] \approx
+\mathcal{L}[\mathcal D, \bphi]
++ \bepsilon^T 
+\underbrace{\nabla_{\bphi} \mathcal{L}[\mathcal D, \bphi]}_{\equiv \textbf g[\mathcal D]}
++ \frac12 
+\bepsilon^T  
+\underbrace{\nabla_{\bphi}^2 \mathcal{L}[\mathcal D, \bphi]}_{\equiv \textbf{H}[\mathcal D]}\;,
+\bepsilon 
+$$
+%
+%In the large sample limit, the average gradient term vanishes, since $\bphi$ minizes the loss. 
+where we introduced the gradient $\textbf g[\mathcal D]$ and the Hessian matrix $\textbf H[\mathcal D]$.  One can show that the covariance of the second term on the right-hand side is given by
+%
+$$
+\text{Cov}_\mathcal{D}(\textbf g[\mathcal D])
+= 
+\underbrace{\frac1N \text{Cov}_{p(\bx, \btheta)}\left[\nabla_{\bphi}\ell_\phi(\bx, \btheta)\right]
+}_{\equiv \textbf C}\;,
+$$
+%
+which exploits the independent of $\mathcal D$ samples.
+Furthermore, the expected (large sample limit) Hessian is given by
+$$
+\bbE_\mathcal{D}[\textbf H [\mathcal D]]
+= 
+\underbrace{\bbE_{p(\bx, \btheta)}\left[\nabla^2_{\bphi}\ell_\phi(\bx, \btheta)\right]
+}_{\equiv \textbf H}\;.
+$$
+Based on these results, we can derive the variance of the loss funciton minimizer and estimate the covariance of the minimum solution to the loss.  We find
+$\text{Cov}(\bepsilon) = \textbf H^{-1} \textbf C \textbf H^{-1}$.
+
+\bigskip
+
+Let us assume that $\bepsilon$ is defined through $q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx) + \sum_i \epsilon_i \delta q^{(i)}(\btheta \mid \bx)$.
+For NPE we then find that
+$$
+H_{ij} = \int d\bx\, d\btheta\, p(\bx, \btheta)
+\frac{
+\delta q^{(i)}(\btheta \mid \bx)
+\delta q^{(j)}(\btheta \mid \bx)
+}
+{p(\btheta \mid \bx)^2}
+$$
+and $C_{ij} = \frac1N H_{ij}$. If we assume that $H_{ij}$ is roughly diagonal, we find that
+
+$$
+\frac{
+\delta q(\btheta^\ast \mid \bx^\ast)
+}
+{p(\btheta^\ast \mid \bx^\ast)}
+\lesssim \frac C{\sqrt{N\cdot p(\bx^\ast, \btheta^\ast) }}
+$$
+where $\bx^\ast, \btheta^\ast = \argmax \delta q(\btheta \mid \bx)$, and is the fractional volume of the generative model.
+
+For NRE, we instead obtain,
+$$
+\frac{
+\delta q(\btheta^\ast \mid \bx^\ast)
+}
+{p(\btheta^\ast \mid \bx^\ast)}
+\lesssim 
+\frac C{\sqrt{N\cdot\min[
+p(\bx^\ast, \btheta^\ast),
+p(\bx^\ast)p(\btheta^\ast) 
+]}}
+$$
+
+
+
+
+\chapter{Test-function-based comparison (optional)}
+
+\textit{Requires: Samples from $p(\btheta \mid \bxobs)$ and $q_\phi(\btheta \mid \bxobs)$.}
+
+The binning-based divergence tests discussed above are useful for comparing one- or two-dimensional marginals, but they do not scale well with dimensionality and can obscure structure in the joint posterior. When working with high-dimensional samples, it is often more practical to use non-parametric, sample-based comparisons that avoid explicit binning. 
+
+In principle, classical tests like the Kolmogorov-Smirnov statistic can be applied to individual posterior marginals, but they are limited to one dimension and insensitive to structural mismatches. In this context, we highlight MMD, which generalize naturally to higher dimensions and capture both global and local discrepancies.
+
+\medskip
+
+The MMD is a kernel-based distance between two sets of samples in arbitrary dimension. It compares distributions based on differences in expectations over a reproducing kernel Hilbert space (RKHS). Given two sample sets $\{\btheta_i\}_{i=1}^N \sim q_\phi$ and $\{\btheta'_j\}_{j=1}^M \sim p$, the unbiased estimator for MMD is
+\[
+\text{MMD}^2 = \frac{1}{N(N-1)} \sum_{i \neq j} k(\btheta_i, \btheta_j) + \frac{1}{M(M-1)} \sum_{i \neq j} k(\btheta'_i, \btheta'_j) - \frac{2}{NM} \sum_{i, j} k(\btheta_i, \btheta'_j),
+\]
+where $k(\cdot,\cdot)$ is a positive-definite kernel, typically a Gaussian kernel. In practice, performance depends on the kernel bandwidth and on appropriate scaling of the parameter space. Whitening the samples—e.g., by transforming them to zero mean and unit variance—can improve sensitivity to discrepancies. MMD is especially useful in moderate dimensions where binning-based methods become infeasible.
+
+
+- MMD provides a principled and efficient approach to comparing posteriors in higher dimensions
+
+- Other sample-based options include Wasserstein distances and energy statistics, 
+
+- These methods typically do not provide insight into *what* is wrong with the posterior approximation—only *that* there is a discrepancy. 
+
+- Nonetheless, they are valuable tools for validating the quality of approximate inference results, especially when paired with methods that reveal structural errors, such as coverage tests or classifier-based diagnostics discussed in Sec.~\ref{sec:calibration_and_rank_tests}
+
+\cw{FIGTODO Optional figure: Showing for different misemodeling the discrepancies in a table - only makes sense with uncertainty estimate based on sample number}
+
+Use JS divergence for simple sanity checks in low-dim, binned comparisons.
+
+Use KS and Wasserstein for interpretable 1D projections (e.g., marginals or summary directions).
+
+Use MMD as a general-purpose scalar metric, especially if kernel bandwidth is adapted to the posterior shape.
+
+Use C2ST when you want a flexible, high-dimensional test that can also help locate why and where things go wrong.
+
+
+
+\medskip
+
+One can show that the TV and the Pearson's $\chi^2$ divergence are connected through the inequality
+$$
+\text{TV}(q_\phi, p)^2 \leq \frac{1}{4} D_{\chi^2}(q_\phi \parallel p)\;.
+$$
+
+
+
+
+\chapter{Gradient signal on summary statistics.}
+
+\emph{Amortization is not only a computational strategy—it is also essential for shaping the summary representation.} The effective learning signal for the summary network \( T_\phi \) arises only when data points with different parameters are contrasted during training. Assuming the conditional estimator \( q_\phi(\btheta \mid T_\phi(\bx)) \) has converged for a given \( T = T_\phi(\bx) \), the summary updates according to
+\[
+\delta T \propto \nabla_T \log q(T \mid \btheta) - \nabla_T \log q(T),
+\quad \text{with} \quad
+q(T) = \int d\btheta\, q(T \mid \btheta) \, p(\btheta).
+\]
+Here, \( q(T \mid \btheta) \) is not modeled explicitly, but defined conceptually via Bayes’ rule from the trained conditional \( q_\phi(\btheta \mid T) \) and the known prior \( p(\btheta) \). This gradient contains an attractive term that pulls \( T \) toward the region associated with \( \btheta \), and a repulsive term that pushes it away from other \( \btheta \). 
+
+The result is an emergent organization of the summary space: representations \( T \) self-cluster according to the parameters of interest. In this sense, the training dynamics \emph{can be seen as a form of supervised learning in disguise}, where \( \btheta \) implicitly guides the structure of the latent representation. Crucially, this effect only arises because amortization exposes the model to a population of diverse \( (\bx, \btheta) \) pairs—providing both “positive” and “negative” examples to guide the geometry of \( T_\phi(\bx) \).
+These insights underscore the importance of choosing architectures and training strategies that support both flexible posterior modeling and the emergence of informative data summaries.

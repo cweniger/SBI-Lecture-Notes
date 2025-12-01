@@ -1,0 +1,307 @@
+\chapter{Advanced Topics}
+\label{chap:adv}
+
+\section{Inference Under Simulator Uncertainty}
+\label{sec:adv:uncertainty}
+
+Model uncertainty is a central concern in any form of model-driven inference, and simulation-based inference is no exception. In practice, simulators are inevitably approximations: they incorporate unknown biases, omit physical effects, and make simplifying assumptions. Using an incorrect model introduces type~A epistemic uncertainties, arising from mismatches between the assumed and the true data-generating process. A critical step toward increasing the practical applicability of SBI is therefore to develop methods that make inference resilient to such mismodeling---ideally, procedures that remain reliable even when the simulator is inaccurate in certain respects. In what follows, we formalize the problem and identify principled strategies for achieving robustness.
+
+
+\subsection{Defining Robustness in Simulation-Based Inference}
+\label{sec:adv:uncertainty:defining}
+
+
+\subsubsection{Model Misspecification in SBI}
+
+The starting point for discussions of model misspecification and Bayesian inference is the (hypothetical) true data-generating process \(p_0(\bx)\)~\citep[\fex][]{kleijn_misspecification_2006, shalizi_dynamics_2009}. It represents the distribution of observations produced by nature, including all physical, instrumental, and environmental effects. In practice, $p_0$ is neither known nor can it be directly simulated; it serves only as a conceptual reference for reasoning about correctness and bias.
+
+In context of the machine-learning literature, a model \(p(\bx\mid\bgamma)\) is often considered well-specified if there exists a configuration \(\bgamma^\ast\) such that \(p(\bx\mid\bgamma^\ast)=p_0(\bx)\)~\citep[\fex][]{cannon_investigating_2022}. However, in the physical sciences we are not primarily interested in matching the overall distribution of observed data.  What matters is whether the simulator captures the \emph{conditional} mechanism linking the physical parameters of interest, \(\btheta\), to observations. 
+
+To formalise this, we write the simulator-based generative model as
+\begin{equation}
+    p(\bx \mid \btheta, \bgamma)\;,
+    \label{eq:sbi-generative-model}
+\end{equation}
+where $\btheta$ denotes the physical parameters of interest and $\bgamma$ 
+indexes the simulator configuration, implementation choices, approximations, 
+or unmodelled effects. Adequacy of the theoretical model requires that, for some simulator configuration setting \(\bgamma^\ast\),
+%
+\begin{equation}
+p(\bx\mid\btheta,\bgamma^\ast)\approx p_0(\bx\mid\btheta)
+\quad\text{for all relevant }\btheta\;,
+\end{equation}
+%
+where \(p_0(\bx\mid\btheta)\) denotes the (hypothetical) \emph{true conditional data-generating mechanism}. This distinction between matching the data distribution and capturing the conditional mechanism is essential for defining robustness in SBI.
+
+The role of \(\bgamma\) remains here intentionally broad. It may index different simulator versions, parametrise uncertain or imperfectly known components, encode missing physical effects, or simply stand in for aspects of the generative mechanism that the simulator does not reliably capture. In practice, the corresponding “true’’ configuration \(\bgamma^\ast\) is unknown and often not even meaningfully parameterisable; it serves only as the conceptual limit in which the simulator reproduces the correct conditional mechanism. Robustness in SBI therefore means designing inference procedures that remain reliable even when \(\bgamma^\ast\) is unknown and only approximated by the available simulator configurations.
+
+
+\subsubsection{The Asymptotic Meaning of Robustness}
+
+If we knew the correct simulator configuration $\bgamma^\ast$,  Bayesian inference would proceed in the usual way,
+%
+\begin{equation}
+    p(\btheta \mid \bxobs, \bgamma^\ast)
+    \propto p(\bxobs \mid \btheta, \bgamma^\ast)\, p(\btheta)\;.
+\end{equation}
+%
+In this idealised setting, the physical parameters take some true value  $\btheta^\ast$, so that the true data-generating distribution satisfies
+%
+\begin{equation}
+    p_0(\bx) = p_0(\bx \mid \btheta^\ast)\;.
+\end{equation}
+%
+If the simulator contains a configuration $\bgamma^\ast$ that reproduces  the correct conditional mechanism, then inference based on $p(\bx\mid\btheta,\bgamma^\ast)$ will concentrate around $\btheta^\ast$ as more data become available.
+
+\medskip
+In practice, however, the correct configuration $\bgamma^\ast$ is unknown,  and using an incorrect value $\bgamma$ alters the posterior  $p(\btheta \mid \bxobs, \bgamma)$.   To understand what “wrong’’ means in a precise sense, it is useful to  consider the asymptotic regime in which many independent observations $\bx_{1:n}$ are drawn from $p_0(\bx)$ and analysed with the  misspecified model $p(\bx \mid \btheta, \bgamma)$.   Classical results on Bayesian asymptotics under misspecification \citep[\fex][]{white_maximum_1982, kleijn_misspecification_2006} show that the posterior then concentrates around the \emph{pseudo-true parameter}
+%
+\begin{equation}
+    \btheta^\dagger(\bgamma)
+    = \arg\min_{\btheta}
+    D_{\mathrm{KL}}\!\left(
+        p_0(\bx) \,\middle\|\, 
+        p(\bx \mid \btheta , \bgamma)
+    \right)\!,
+\end{equation}
+that is, the value of $\btheta$ whose likelihood is closest in the  Kullback--Leibler sense to the true distribution under the assumed  configuration~$\bgamma$.   For the correct configuration one recovers  $\btheta^\dagger(\bgamma^\ast)=\btheta^\ast$, while for any other value  of $\bgamma$ the limiting parameter will in general be biased.
+
+Moreover, in the large-$n$ limit the posterior becomes increasingly concentrated around $\theta^{\dagger}(\gamma)$, shrinking at the usual $1/\sqrt{n}$ rate (a Bernstein-von Mises-type behaviour; see \cite{belomestny_bernsteinvon_2023} for a recent review). This means that even small biases induced by choosing an incorrect configuration $\gamma$ will be amplified across many observations, leading to combined inferences that do not converge to the true value $\theta^\ast$.
+
+\paragraph{Why asymptotics matter} Although many experiments in the physical sciences are not repeatable in the strict sense, we routinely combine information from multiple independent observations. Ensuring that each single-event posterior behaves correctly in the asymptotic sense is therefore essential for the consistency of joint or hierarchical analyses~\citep{koers_misspecified_2023}.  Robustness in SBI thus ideally aims at designing inference procedures whose posteriors remain well behaved---in particular, concentrate near  $\btheta^\ast$ with appropriate uncertainty scaling---even when the  unknown configuration $\bgamma^\ast$ is only imperfectly approximated by  the available simulator family.
+
+
+\subsubsection{Three Strategies for Robust SBI}
+
+The asymptotic considerations above suggest that robustness requires controlling how inference depends on the unknown simulator configuration~$\bgamma^\ast$. In practice, one may distinguish three very broad strategies for addressing such misspecification, which align with the three components of SBI in Fig.~\ref{fig:sbi_overview}:\footnote{In actual scientific applications, approaches are mixed, calibration observations play a role, not everything in the literature strictly maps onto the presented categories. But we find it useful to draw here in broad strokes to frame the discussion and highlight main differences.} \emph{model augmentation}, \emph{robust summary learning}, and \emph{general Bayesian updating}. Each modifies a different component of the inference pipeline---the simulation model, the compressed data representation, or the Bayesian update rule---and each tends to exhibit different asymptotic behaviour.
+
+
+\paragraph{Model augmentation}
+
+A first approach treats $\bgamma$ as a latent nuisance variable and integrates it out,
+%
+\begin{equation}
+    p(\btheta \mid \bxobs)
+    \;\longrightarrow\;
+    \frac{1}{Z}\!\int p(\bxobs \mid \btheta,\bgamma)\,p(\bgamma)\,p(\btheta)\,d\bgamma\;.
+\end{equation}
+%
+Examples include modeling systematic uncertainties (parametrized though $\bgamma$) with uninformed priors, or the use of Gaussian processes (represented by $\bgamma$) to account for unmodeled components.  This strategy is expected to be asymptotically reliable if each observation has an independent configuration $\bgamma_i \sim p(\bgamma)$, and if its prior is correctly specified, $p(\bgamma)=p_0(\bgamma)$. Otherwise, the $\bgamma$–averaged simulator may itself become misspecified and the posterior concentrates at a pseudo-true parameter $\btheta^\dagger$.  
+If $\bgamma$ is instead a global calibration parameter or systematic effect shared across all observations, treating it as i.i.d.\ noise is invalid, and it should be be jointly estimated as global parameter with $\btheta$. 
+
+\paragraph{Robust summary learning}
+A second strategy constructs summaries $T(\bx)$ such that inference depends on
+$p(T(\bx)\mid\btheta,\bgamma)$ rather than on $p(\bx\mid\btheta,\bgamma)$,
+\begin{equation}
+    p(\btheta \mid \bxobs)
+    \;\longrightarrow\;
+    \frac{1}{Z}\,
+    p\!\big(T(\bxobs)\mid\btheta,\bgamma\big)\,p(\btheta)\,,
+    \qquad\text{for any }\bgamma\;.
+\end{equation}
+This essentially corresponds to masking those aspects of the data for which the simulator is misspecified.  Robustness is achieved when $T$ successfully removes the dependence on $\bgamma$, i.e.\ when $p(T(\bx)\mid\btheta,\bgamma)\approx p(T(\bx)\mid\btheta)$ for all relevant $\bgamma$, including the unknown $\bgamma^\ast$.   In this ideal situation the summary likelihood becomes well specified, and the posterior  is expected to asymptotically focus on $\btheta^\ast$.  In practice, however, removing all $\bgamma$-dependence maybe be difficult to achieve.  Robust summary learning therefore introduces a bias-variance trade-off: reducing sensitivity to $\bgamma$ inevitably discards some information about~$\btheta$.  
+
+\paragraph{General Bayes}
+A third strategy encompasses everything where the Bayesian update rule itself is modified with the intend to increase robustness. In a general form, it may be formalized as replacing the likelihood by an appropriate loss function~(see \cite{bissiri_general_2016}, and 
+\cite{guedj_primer_2019} for connections to PAC Bayesian learning)
+%
+\begin{equation}
+    p(\btheta \mid \bxobs)
+    \;\longrightarrow\;
+    \frac{1}{Z}\,\exp\!\big(-\ell(\btheta,\bxobs)\big)\,p(\btheta)\;,
+\end{equation}
+%
+where $\ell(\btheta, \bx)$ is chosen to reduce the impact of misspecification.  Examples include tempered likelihoods, but also (in the broad sense that we adopt here) the analysis of denoised data.  In general, however, such updates would asymptotically concentrate at the loss-risk minimiser $\btheta_\ell^\dagger=\arg\min_\theta \mathbb{E}_{p_0}[\ell(\theta,X)]$, which typically differs from both $\btheta^\ast$ and the KL pseudo-true value.   Posterior uncertainty is not automatically calibrated unless $\ell$ is correctly scaled, and only special choices yield desirable asymptotic behaviour.
+
+\medskip
+These three approaches correspond to modifying the simulator, the representation, or the update rule.  In the remainder of this section we focus on \emph{robust summary learning}, which may offer the most principled path to asymptotic correctness.
+
+
+\subsection{Robust Summary Learning}
+\label{sec:adv:uncertainty:robust}
+
+As motivated in Sec.~\ref{sec:adv:uncertainty:defining}, we will consider a generative model that includes both the parameters of interest \(\btheta\) and the latent model configuration \(\bgamma\), with the full joint distribution
+%
+\begin{equation}
+    p(\bx, \btheta, \bgamma) = p(\bx \mid \btheta, \bgamma) p(\btheta \mid \bgamma) p(\bgamma)\;.
+    \label{eqn:joint_model}
+\end{equation}
+%
+Since we focus on situations where \(\bgamma\) captures uncertainties in the data-generating process rather than in our prior beliefs about \(\btheta\), we subsequently assume \(p(\btheta \mid \bgamma) = p(\btheta)\).   Furthermore, we are interested in the summary-induced generative model, where all dependence on \(\bx\) enters only through the learned summary \(T(\bx)\),
+%
+\begin{equation}
+    p(T(\bx), \btheta, \bgamma) = p(T(\bx) \mid \btheta, \bgamma) p(\btheta) p(\bgamma)\;.
+    \label{eqn:joint_model}
+\end{equation}
+%
+For this specific but very generally applicable setting, we will explore how variations in the simulator configuration, $\bgamma$, biases inferential tasks, using concepts of information theory.  This will provide the necessary basis for defining optimization strategies and criteria for robust inference.
+
+
+\subsubsection{Three Faces of Configuration Bias}
+\label{sec:adv:uncertainty:robust:three}
+
+Above, we assumed that the model parameters \(\btheta\) and simulator configurations \(\bgamma\) are statistically independent. (Even if they were not, modifying the data summaries \(T(\bx)\) would not alter that dependence.) This leaves three channels through which the simulator configuration can enter the inference procedure: the posterior, the data summary, and the likelihood.
+
+
+\paragraph{Posterior bias: parameter estimates that depend on $\bgamma$}
+
+When model configurations \(\bgamma\) vary, inference based on a given summary statistics \(T_\phi(\bx)\) can become biased or unstable.  Our goal is therefore to learn a summary mapping \(T_\phi(\bx)\) such that the resulting posterior becomes (approximately) independent of the simulator configuration. That is, we seek summaries for which
+\[
+p(\btheta \mid T_\phi(\bx), \bgamma) \simeq p(\btheta \mid T_\phi(\bx)) \quad \text{for all plausible } \bgamma\;.
+\]
+%
+This expresses the requirement that, once the data are summarized by \(T_\phi(\bx)\), changing the simulator configuration \(\bgamma\) no longer affects inference over \(\btheta\).\footnote{Note that here $p(\btheta \mid T_\phi(\bx))$ is technically marginalized over $\bgamma$, but its main role is to simply provide a constant reference point. The specifically adopted prior is not relevant.} 
+
+A natural way to quantify deviations from this ideal is via the mutual information between \(\btheta\) and \(\bgamma\), conditioned on \(T_\phi(\bx)\):
+\begin{equation}
+\mathbb{E}_{p(\bx \mid \bgamma)p(\bgamma)}
+\left[D_{\mathrm{KL}}\left(p(\btheta \mid T_\phi(\bx), \bgamma) \mid\mid p(\btheta \mid T_\phi(\bx))\right)\right] 
+\equiv
+\mathcal{I}(\btheta; \bgamma \mid T_\phi(\bx)) 
+\leq \varepsilon\;.
+\label{eqn:posterior_bias}
+\end{equation}
+%
+This quantity measures how much knowing \(\bgamma\) improves inference about \(\btheta\), given the summary. We use this mutual information as a proxy for posterior bias throughout. When \(\varepsilon = 0\), the posterior is completely robust to simulator configurations, independent of the prior over \(\bgamma\) (as long as it has sufficient support). 
+
+\smallskip
+
+Small values of \(\varepsilon\) indicate that inference is stable across different simulator configurations and approximates the result we would obtain under the correct (but unknown) \(\bgamma^\ast\). At the same time, this invariance must be balanced against the requirement that \(T_\phi(\bx)\) remains informative about \(\btheta\); overly aggressive bias suppression may lead to summaries that are too coarse for precise inference.
+
+\paragraph{Summary bias: representation drift across $\bgamma$}
+
+Even if posterior inference is stable across \(\bgamma\), the learned summary \(T_\phi(\bx)\) itself may retain residual dependence on the simulator configuration. This can occur when \(T_\phi(\bx)\) encodes aspects of the data that are irrelevant for inference over \(\btheta\) but still vary with \(\bgamma\). Such dependence is typically undesirable, as it makes the influence of \(\bgamma\) on the representation---and therefore on the overall inference pipeline---harder to diagnose and control.
+
+It is therefore natural to require that the distribution of \(T_\phi(\bx)\) be invariant to changes of the simulator configuration \(\bgamma\), i.e.,
+\[
+p(T_\phi(\bx) \mid \bgamma) \simeq p(T_\phi(\bx)) \quad \text{for all plausible } \bgamma.
+\]
+This condition ensures that \(T_\phi(\bx)\) and \(\bgamma\) are statistically independent, meaning that observing the summary provides little or no information about the underlying simulator configuration. 
+
+As before, this requirement can be formalized using mutual information:
+\begin{equation}
+\mathbb{E}_{p(\bgamma)}\left[D_{\mathrm{KL}}\left(p(T_\phi(\bx) \mid \bgamma) \,\|\, p(T_\phi(\bx))\right)\right]
+\equiv
+\mathcal{I}(T_\phi(\bx); \bgamma)  
+\leq \varepsilon.
+\label{eqn:summary_bias}
+\end{equation}
+%
+In the limit \(\varepsilon \to 0\), this enforces strict simulator invariance of the summary, independent of the specific prior over \(\bgamma\). Note that while this promotes interpretability, it does \emph{not} by itself guarantee robustness of the posterior as in Eq.~\eqref{eqn:posterior_bias}: \(T_\phi(\bx)\) and \(\bgamma\) may still be dependent once \(\btheta\) is fixed.
+\footnote{Marginal independence does not imply conditional independence. 
+Let $\theta,\gamma\in\{0,1\}$ be independent and uniform. Define  
+$T = \gamma$ when $\theta=0$ and $T = 1-\gamma$ when $\theta=1$.  
+Then $T$ and $\gamma$ are deterministically dependent given $\theta$,
+but marginally $p(T,\gamma)=p(T)p(\gamma)=\frac14$ for all $T$ and $\gamma$.}
+
+
+\paragraph{Likelihood bias: $\bgamma$-dependence at fixed parameters}
+
+The most direct impact on the inference process comes through the likelihood function.   Following the same logic as above, we can write the condition for a summary likelihood that is independent of the simulator configuration $\bgamma$,
+\[
+p(T_\phi(\bx) \mid \btheta, \bgamma) \simeq p(T_\phi(\bx) \mid \btheta) \quad \text{for all plausible } \bgamma\;.
+\]
+
+Again, this condition can be formalised and written in terms of mutual information  between the summary \(T_\phi(\bx)\) and the simulator configuration \(\bgamma\), conditioned on the parameter \(\btheta\):
+\begin{equation}
+\mathbb{E}_{p(\bx, \btheta, \bgamma)} 
+\left[ 
+\log \frac{p(T(\bx), \bgamma \mid \btheta)}{p(T(\bx) \mid \btheta)\, p(\bgamma \mid \btheta)} 
+\right]
+ \equiv \mathcal{I}(T(\bx); \bgamma \mid \btheta) 
+    \leq \varepsilon \,.
+    \label{eqn:likelihood_bias}
+\end{equation}
+%
+This quantity captures how much additional information about the summary \(T(\bx)\) is provided by \(\bgamma\), beyond what is already explained by \(\btheta\). It therefore quantifies the stability of the summary likelihood function across simulator configurations.
+
+
+\subsubsection{The Simulator Bias Identity}
+
+All of the mutual-information–based bias measures introduced above can be unified in a single quantity that captures the total dependence of the inference process on the simulator configuration \(\bgamma\). This is the mutual information between the summarized simulator outputs \((\btheta, T_\phi(\bx))\) and the configuration \(\bgamma\), given by
+%
+\begin{equation}
+\mathcal{I}(\btheta, T_\phi(\bx); \bgamma)
+\equiv
+\int d\btheta \, d\bx \, d\bgamma\;
+p(\btheta, \bx, \bgamma) \log \left(
+\frac{p(\btheta, T_\phi(\bx) \mid \bgamma)}{p(\btheta, T_\phi(\bx))} 
+\right) \;,
+\label{eqn:total_bias}
+\end{equation}
+%
+and it quantifies the overall bias induced by varying simulator configurations. If this quantity vanishes, then the joint distribution of \(\btheta\) and \(T_\phi(\bx)\) is completely independent of \(\bgamma\), implying fully robust inference across simulator variants.
+
+
+\paragraph{Simulator bias decomposition identity}  The various bias terms introduced above are linked by a simple and illuminating relation,
+%
+\begin{equation}
+    \underbrace{\mathcal{I}(T_\phi(\bx); \gamma)}_{\text{Summary bias}}
+    +
+    \underbrace{\mathcal{I}(\btheta; \gamma \mid T_\phi(\bx))}_{\text{Posterior bias}}
+    \;=\;
+    \underbrace{\mathcal{I}(\btheta, T_\phi(\bx); \gamma)}_{\text{Simulator bias}}
+    \;=\;
+    \underbrace{\mathcal{I}(\btheta; \gamma)}_{\text{Prior bias}}
+    +
+    \underbrace{\mathcal{I}(\gamma ; T_\phi(\bx) \mid \btheta)}_{\text{Likelihood bias}}
+    \label{eqn:bias_identity}
+\end{equation}
+which follows directly from the chain rule of mutual information. For a fixed summary map \(T_\phi(\bx)\), each term quantifies a different way in which the simulator configuration \(\bgamma\) can influence the inference problem. The identity therefore shows how summary, posterior, prior, and likelihood biases decompose the \emph{simulator bias}—the total dependence of the inference pipeline on \(\bgamma\).
+
+A key consequence is that an upper bound on the likelihood bias automatically bounds both the summary and posterior bias. Since we assume that \(\btheta\) and \(\bgamma\) are independent a priori, the prior bias term vanishes. Thus, enforcing a sufficiently small likelihood bias is enough to suppress all remaining forms of configuration-induced bias.
+
+
+\subsubsection{Constrained Optimisation for Robust Minimal Summaries}
+
+As discussed in Sec.~\ref{sec:adv:uncertainty:robust}, robustness requires data summaries  $T(\bx)$ that remove sensitivity to simulator configurations~$\bgamma$ while  retaining predictive information about~$\btheta$.   Two complementary information-theoretic principles govern this trade-off:  (i) \emph{invariance} to different simulator configurations, and  (ii) controlled \emph{compression} to suppress spurious or unstable features.  We now formalize both ideas.
+
+The simulator bias identity, Eq.~\eqref{eqn:bias_identity}, shows that robustness to simulator configurations~$\bgamma$ is achieved most directly by suppressing the posterior and summary bias, or equivalently the likelihood bias $\mathcal{I}(T(\bx);\bgamma\mid\btheta)$.  Minimizing this term with respect to the summary $T_\phi(\bx)$ alone, however, admits the trivial solution of a summary that is uninformative about $\btheta$. To avoid such collapse, one must simultaneously \emph{retain} parameter-relevant information, as given by $\mathcal{I}(T_\phi(\bx); \btheta)$, while \emph{removing} configuration-relevant information.  
+
+\paragraph{Lagrangian objective for robust minimal summaries}
+
+It is standard to express the trade-off discussed above through a Lagrangian objective. With the goal in mind that $T_\phi(\bx)$ 
+should be \emph{informative}, \emph{robust} and \emph{minimal}, we can write as optimisation objective:
+\begin{equation}
+\label{eqn:IIB_objective}
+\max_{T_\phi}\;
+\underbrace{\mathcal{I}(T_\phi(\bx);\btheta)}_{
+\substack{\text{Parameter}\\ \text{information}}}
+-\lambda
+\underbrace{\mathcal{I}(\btheta; \bgamma \mid T_\phi(\bx))}_{
+\substack{\text{Posterior bias}}}
+- \eta
+\underbrace{\mathcal{I}(T_\phi(\bx);\bgamma)}_{
+\substack{\text{Summary bias}}}
+- \beta
+\underbrace{\mathcal{I}(T_\phi(\bx);\bx)}_{
+\substack{\text{Information}\\ \text{bottleneck}}}
+\;.
+\label{eqn:robust_minimal_summary_objective}
+\end{equation}
+%
+Here, $\lambda, \eta, \beta \geq0$ are tunable hyperparameters that control the trade-off balance. We will discuss each of the four components of the optimisation objective in Eq.~\eqref{eqn:robust_minimal_summary_objective} separately.
+\begin{itemize}
+    \item \textbf{Parameter information}: Maximizing the first term in Eq.~\eqref{eqn:robust_minimal_summary_objective} is necessary to retain information about the parameters of interest, $\btheta$. This is often a automatic consequence of end-to-end learning of data summaries, see \fex\ the NPE loss in Eq.~\eqref{eqn:NPE_MI}.
+    
+    \item \textbf{Posterior bias}: As discussed in Sec.~\ref{sec:adv:uncertainty:robust:three}, this term controls how much the posterior $p(\btheta \mid T_\phi(\bx), \bgamma)$ depends on the simulator configuration $\bgamma$.  It appears in the literature in context of invariant risk minimization  \citep{arjovsky_invariant_2020} and invariant information bottleneck \citep{li_invariant_2022}.
+    
+    \item \textbf{Summary bias}: As discussed in Sec.~\ref{sec:adv:uncertainty:robust:three}, this term controls how much the data summary distribution, $p(T_\phi(\bx) \mid \bgamma)$, varies with $\bgamma$.  It appears in the literature in context of fair and invariant representation learning,  \citep{zemel_learning_2013, zhao_fundamental_2020}.  If $\lambda = \eta$, the term and the previous one can be replaced equivalently by the likelihood bias, but we kept the contributions here separate for clarity.
+    
+    \item \textbf{Information bottleneck}: This term penalises how much information the summary $T_\phi(\bx)$ retains of the full data $\bx$.  It suppresses unnecessary information in the summary $T_\phi(\bx)$, promoting a \emph{minimal} summary. In the literature it appears in context of information bottleneck ideas \citep{tishby_information_2000}.
+\end{itemize}
+
+The introduction of the information bottleneck term does not only promote minimalism, but can also enhance robustness. Simulator configuration invariance alone does not guarantee robustness of inference to \emph{unmodeled forms of mismodeling}, i.e.\ deviations not captured by~$\bgamma$. In particular high-dimensional complex summaries may still encode aspects of $\bx$ that are sensitive to unmodeled imperfections of the simulator.  The information bottleneck term can help to further reduce such pathways for mismodeling to propagate, into the inference results. 
+
+\cw{MAYBE: Individual components visualised in Fig.~\ref{fig:Venn2}}
+
+\cw{MAYBE: Technical implementation }
+
+%\input{drafts/robust_summary_variational}
+
+
+
+%\input{drafts/finite_data_effects}
+
+%\input{drafts/sequential_methods}
+

@@ -1,0 +1,81 @@
+\section{A Projectile Simulator with a Wall-Mounted Detector}
+
+%--------------------------------------------------------------
+% Toy projectile simulator with a wall‑mounted detector
+%--------------------------------------------------------------
+\begin{algorithm}[t]
+\caption{Projectile simulator with selective detector}\label{alg:proj}
+\begin{algorithmic}[1]
+\State \textbf{Input:} 
+\State \hspace{\algorithmicindent} Priors  
+$p(v_{\text{ini}})=\mathcal N(0,\sigma_v^{2})$ (truncated to $v_{\text{ini}}>0$)  
+\State \hspace{\algorithmicindent} \phantom{Priors} $p(\phi_{\text{ini}})=\text{Uniform}\bigl[\phi_{\min},\phi_{\max}\bigr]$  
+\State \hspace{\algorithmicindent} \phantom{Priors} $p(M)=\text{Poisson}(\lambda)$ \Comment{number of throws}  
+\State \hspace{\algorithmicindent} \phantom{Priors} 
+$p(\epsilon)=\mathcal{N}(0, \sigma_\epsilon^2)$
+\State \hspace{\algorithmicindent} Disturbance $p(d)=\mathcal N(0,\sigma_d^{2})$  \Comment{e.g.\ wind kick}  
+\State \hspace{\algorithmicindent} Wall position $x=L$, detector window $[h_{\min},h_{\max}]$
+\State \textbf{Output:} Accepted samples $\Theta=\{(h^{(i)},v^{(i)},\phi^{(i)})\}$
+
+\State Sample $M\sim p(M)$;  $\Theta\gets\emptyset$
+\For{$i=1$ to $M$}
+    \State $v\sim p(v_{\text{ini}})$,\enspace $\phi\sim p(\phi_{\text{ini}})$,\enspace $d\sim p(d)$
+            \Comment{Draw from parameter priors}
+    \State $h\gets \textsc{Sim}(v, \phi, d)$
+    %\underbrace{L\tan\phi-\dfrac{gL^{2}}{2v^{2}\cos^{2}\phi}}_{\text{ballistic}}+d$
+            \Comment{Ballistic simulator}
+    \If{$h_{\min}\le h\le h_{\max}$}  \Comment{Ball hits detector}
+        \State $\hat h \gets h + \epsilon$, $\epsilon \sim p(\epsilon)$
+        \Comment{Add measurement noise}
+        \State $\Theta \gets \Theta \cup \{(\hat h,v,\phi)\}$
+    \EndIf
+\EndFor
+\State \Return $\Theta$
+\end{algorithmic}
+\end{algorithm}
+
+
+
+- This example also illustrates several limitations of basic SBI strategies such as ABC, which motivate the neural methods introduced in the following sections:
+
+\paragraph{Setup.}
+
+- We consider the projectile simulator defined in Algorithm~\ref{alg:proj}, which models the ballistic trajectories of projectiles launched with uncertain initial speed and angle, subject to stochastic wind disturbance and measurement noise.
+
+- A wall-mounted detector at horizontal position \( x = L \) records only those projectiles whose impact height falls within a specified window. The observation is a noisy version of the true height, \( \hat h = h + \epsilon \).
+
+- This basic setup captures many features typical of simulation-based models: selective detection, stochasticity, and implicit marginalization over latent variables (e.g.\ wind and speed).
+
+\paragraph{Inference task.}
+
+- Our goal is to infer the posterior distribution over the initial launch angle \( \phi \), given an observed impact height \( \hat h \).
+
+- This corresponds to computing the marginal posterior \( p(\phi \mid \hat h) \), without requiring the full joint posterior over all simulator parameters.
+
+- As discussed in Sec.~\ref{sec:marginal_inference}, ABC and other SBI methods can directly approximate such marginals, even when the full likelihood is intractable.
+
+\paragraph{ABC with a single projectile.}
+
+- In the simplest case, each simulation trial corresponds to a single projectile. We apply rejection ABC (Algorithm~\ref{alg:ABC}) using the observed height \( \hat h \) and a distance metric \( d(h, \hat h) \).
+
+- For simplicity, we use the mean height as summary statistic—trivial in this case since there's only one sample.
+
+- [Insert plot: posterior samples for \( \phi \) from rejection ABC for one projectile, show ground truth]
+
+\paragraph{ABC with multiple projectiles.}
+
+- To increase the realism and complexity of the simulation, we allow the number of projectiles per trial to vary. In Algorithm~\ref{alg:proj}, this is modeled by drawing \( M \sim \text{Poisson}(\lambda) \).
+
+- The observed data \( \hat h_1, \ldots, \hat h_M \) now forms a variable-length set. We summarize it using the mean impact height \( \bar{h} = \frac{1}{M} \sum_i \hat h_i \), or both mean and variance.
+
+- This introduces additional latent variables (e.g.\ \( M \), wind realizations), making the likelihood highly intractable. Yet, ABC naturally integrates over them via forward simulation.
+
+- [Insert plot: posterior for \( \phi \) inferred using ABC with multiple projectiles; compare to single-ball case]
+
+\paragraph{Remarks.}
+
+- This example illustrates how SBI methods—including basic rejection ABC—can handle selective data, measurement noise, and marginalization over internal simulator variables without requiring explicit likelihood evaluation.
+
+- The difficulty of expressing \( p(\hat h \mid \phi) \) or \( p(\bar h \mid \phi) \) in closed form highlights the key motivation for simulation-based inference.
+
+- Extensions to other tasks—e.g.\ inferring whether any projectiles hit the target (object detection), or comparing models with different disturbance levels (model selection)—can be handled similarly.

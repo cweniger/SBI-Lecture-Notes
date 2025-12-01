@@ -1,0 +1,544 @@
+\chapter{Foundations of Simulation-Based Inference}
+\label{chap:found}
+
+\begin{quotation}
+    \textit{``[...] one of the great scientific advantages of simulation analysis of Bayesian methods is the freedom it gives the researcher to formulate appropriate models rather than be overly interested in analytically neat but scientifically inappropriate models.''}
+
+%    \hfill Gelman and Rubin, 1996 \cw{TODO: Check}
+    \hfill --- \cite{gelman_markov_1996}\footnote{In the quote from \cite{gelman_markov_1996}, `simulation analysis' actually refers to likelihood-based inference such as MCMC, which is contrasted with exact symbolic methods.  It is telling that the same statement can be equally well used to contrast simulation-based and likelihood-based inference methods, the latter of which commonly rests on the availability of `analytically neat' likelihood functions.}
+\end{quotation}
+
+
+\section{Classical Inference and the Case for Simulation-Based Methods}
+\label{sec:found:classical}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/Fig1.drawio.pdf}
+    \caption{Likelihood-based inference algorithm have access to the prior and the evaluated likelihood, which is a single scalar that quantifies closeness to the observation $\mathbf x_o$.  Simulation-based inference algorithms have access both to the observation $\mathbf x_o$ as well as simulation results $\mathbf x$, and can determine their own optimal distance measures.}
+\label{fig:SBI_vs_LBI}
+\end{figure}
+
+We start with a compact introduction to Bayesian inference\footnote{\cw{TODO Discuss frequentism}}, focusing on essential elements relevant for the lecture notes. For comprehensive excellent historical and more recent introductions we refer to ~\cite{raiffa_applied_1961, rubin_bayesianly_1984, mackay_information_2003, gelman_bayesian_2013}.
+
+\smallskip
+
+Consider a probabilistic model for observed data \( \bx \), described by the conditional distribution \( p(\bx \mid \btheta) \), where \( \btheta \) denotes a set of model parameters. Both \( \bx \) and \( \btheta \) may represent complex or structured quantities—for instance, \( \bx \) might consist of gene expression levels in biology, spectral lines in chemistry, time series from astronomical observations, or raw measurements from a physics experiment. Correspondingly, \( \btheta \) could encode molecular concentrations, reaction rates, cosmological parameters, or theory coefficients.
+%
+Given access to the likelihood \( p(\bx \mid \btheta) \), Bayes' theorem~\citep[\fex][]{gelman_bayesian_2013} allows direct computation of the posterior:
+\begin{equation}
+    p(\btheta \mid \bx) = \frac{p(\bx \mid \btheta) \, p(\btheta)}{p(\bx)}\;.
+    \label{eqn:Bayes_theorem}
+\end{equation}
+Here, $p(\btheta)$ is the prior parameter distribution, and $p(\bx)$ a normalizing constant usually referred to as Bayesian evidence or marginal likelihood. The posterior distribution embodies everything we know about the parameter $\btheta$ after seeing the data $\bx$ \citep[\fex][]{mackay_information_2003}.
+
+Despite the simple analytic form of Bayes' theorem, accessing the posterior usually brings either analytically or computationally challenging problems—or both. This is related to the fact that the likelihood function typically involves a large number of latent (unobserved) parameters, which might include measurement noise, data masks, uncertainties of the experimental apparatus, population parameters, etc. These parameters, here collectively called $\boldeta$, lead to a likelihood function with hierarchical form\footnote{
+Note that the parameters $\boldeta$ might themselves depend on $\btheta$, otherwise we would have $p(\boldeta \mid \btheta) = p(\boldeta)$. 
+}
+\begin{equation}
+    p(\bx \mid \btheta) = \int d\boldeta\, p(\bx \mid \btheta, \boldeta) p(\boldeta \mid \btheta)\;.
+    \label{eqn:likelihood_with_nuisance}
+\end{equation}
+%
+Solving the integration problem in Eq.~\eqref{eqn:likelihood_with_nuisance}---and related integration problems connected to the Bayesian evidence $p(\bx)$---represents one of the key aspects that makes Bayesian (but also Frequentist) inference challenging in practice.
+
+
+
+\subsection{About Explicit and Implicit Models}
+\label{sec:found:classical:implicit}
+
+There exist two complementary ways of accessing the likelihood model—depending on whether the likelihood is defined \emph{explicitly}, as a function that can be evaluated, or \emph{implicitly}, as a distribution that can be sampled from (see \cite{diggle_monte_1984} for an early discussion in the context of Monte Carlo methods, and \cite{mohamed_learning_2017} for a discussion in the context of generative models).  
+
+It is useful to highlight the distinct computational challenges for explicit and implicit likelihood models, which can be related to how those models handle the process of marginalizing (`integrating out') unobserved quantities. From a computational perspective, this distinction manifests as follows:
+
+\begin{itemize}
+    \item \textbf{Explicit model access (evaluation).} Explicit likelihood models provide a deterministic routine, \textsc{LogLike}(\( \bx, \btheta \)), which evaluates the log-likelihood \( \log p(\bx \mid \btheta) \) for given inputs. Optionally, a related routine \textsc{Score}(\( \bx, \btheta \)) may return the gradient \( \nabla_{\btheta} \log p(\bx \mid \btheta) \), and possibly higher-order derivatives.
+    
+    \textit{Example:} Evaluating the hierarchical likelihood $p(\bx
+    \mid \btheta)$ in Eq.~\eqref{eqn:likelihood_with_nuisance} for a given value
+    of $\btheta$ requires integrating (marginalizing) over $\boldeta$, either analytically or with Monte Carlo methods.  Computational costs scale with the complexity of integrating over latent space parameters $\boldeta$.
+
+    \item \textbf{Implicit model access (sampling).} Implicit likelihood models take the form of a stochastic simulator, \textsc{Sim}(\( \btheta \)), which generates random outputs \( \bx \sim p(\bx \mid \btheta) \). This corresponds to forward simulation. The simulator is stochastic in the sense that repeated calls with the same \( \btheta \) produce different \( \bx \), thereby implicitly defining the likelihood.
+
+    \textit{Example:} For a given value of $\btheta$, sampling from the latent parameter prior and subsequently from the data likelihood generates a sample from $p(\bx \mid \btheta)$,
+    \[
+    \boldeta \sim p(\boldeta \mid \btheta), \quad \bx \sim p(\bx \mid \btheta, \boldeta)
+    \quad \text{which gives} \quad
+    \bx \sim p(\bx \mid \btheta).
+    \]
+    No explicit computation of the likelihood $p(\bx \mid \btheta)$ is needed.  Computational costs are \emph{independent} of the complexity of integrating over the latent space.
+\end{itemize}
+%
+While these modes describe access to the \emph{same} underlying distribution $p(\bx \mid \btheta)$, only one of them may be tractable (\textit{i.e.}, solvable or manageable with reasonable computational effort) in a given application. In many scientific contexts---particularly in physics, biology, and astronomy---\textsc{Sim}(\( \btheta \)) is available as a domain-specific simulator, while \textsc{LogLike} and \textsc{Score} are intractable, \fex\ due to complex integration tasks related to latent variables. Conversely, in analytically tractable models---such as Gaussian likelihoods for aggregated measurements or Poisson models for counting data---\textsc{LogLike} and \textsc{Score} may be explicitly available, while constructing a generative simulator \textsc{Sim}(\( \btheta \)) that faithfully samples \( \bx \sim p(\bx \mid \btheta) \) may be challenging due to the high-dimensionality of data $\bx$ or latent variables $\boldeta$ or sharp prior constraints.
+
+\medskip
+
+An important subtlety is that a single explicit likelihood model may correspond to many different implicit simulation tasks with vastly different levels of difficulty. Even when the posterior \( p(\btheta \mid \bx) \) is well-defined and tractable for likelihood-based methods, the computational challenge of simulation-based inference depends critically on how the data \( \bx \) is generated, represented, and processed by the simulator. A seemingly simple explicit likelihood—such as a low-dimensional Gaussian—may correspond to either a trivial or highly challenging simulation-based inference problem, depending on the structure and dimensionality of the simulated observations. For instance, inferring a scalar parameter from its noisy measurement is straightforward, while inferring the same parameter from high-dimensional images generated by a complex forward model presents entirely different computational challenges. As such, evaluating the difficulty of an inference task—and comparing the performance of explicit versus implicit approaches—requires careful attention to the simulation model and data representation, not just the underlying likelihood function.
+
+\subsection{Inference Algorithms and Accessible Models}
+\label{sec:found:classical:accessible}
+
+A wide range of techniques have been developed to address the computational challenges of explicit and implicit likelihood models in the context of Bayesian inference.  In broad strokes, these can be separated into symbolic, likelihood-based methods (for explicit models) and simulation-based techniques (for implicit models), as shown in Fig.~\ref{fig:SBI_vs_LBI}.
+
+\medskip
+
+Symbolic Bayesian inference techniques, using analytical tools like conjugate priors and related methods, were popularized in economics and decision theory in the 1950s and 1960s (see \cite{raiffa_applied_1961} for an in-depth account). The applicability of these methods typically requires that the likelihood and prior follow restricted classes of analytical functions (exponential families, conjugate priors, etc.) that are amenable to analytic treatment. The result is exact and explicit posterior functions, $p(\btheta \mid \bx)$.
+
+In the 1990s, Bayesian inference was revolutionized by the adoption of MCMC methods to sample from marginal distributions including posteriors, introduced in a seminal paper by \cite{gelfand_sampling-based_1990}. 
+These techniques allowed to handle explicit likelihood models that do not fall into the narrow categories of symbolic inference. Among the most widely adopted MCMC algorithms are the Metropolis–Hastings algorithm \citep{metropolis_equation_1953, hastings_monte_1970}, which was initially developed in the context of statistical physics, and the Hamiltonian Monte Carlo algorithm \citep{duane_hybrid_1987, neal_mcmc_2011}, originally introduced for applications in particle physics (specifically lattice QCD). 
+During this decade, variational inference (VI) methods also emerged, which find explicit approximations to the posterior~\citep[\fex][]{jordan_introduction_1999}.
+%and later also complementary approaches such as nested sampling \citep{skilling_nested_2006}, were developed.  
+Most of these techniques provide implicit access (in the form of samples) to the exact posterior, $\btheta \sim p(\btheta \mid \bx)$.
+
+\medskip
+
+The question then becomes: how can we perform Bayesian inference when we can simulate but cannot evaluate the likelihood?  Since the 1980s (and formally the early 2000s), inference methods based on implicit models started receiving attention and were formally developed.  These methods are the main focus of these lecture notes, and typically provide implicit (in terms of samples) or explicit (in terms of density evaluations) access to \emph{approximations} to the posterior, $\btheta \sim q_\phi(\btheta \mid \bx) \simeq p(\btheta \mid \bx)$.  Those methods provide the greatest flexibility in terms of model definition.  However, due to the approximate nature of the inference tasks, they also require a careful understanding of failure modes and associated challenges.
+
+
+\cw{TODO: Discuss concrete examples in terms of parameter mapping, "resonance example" etc}
+
+
+\section{Approximate Bayesian Computation}
+\label{sec:found:abc}
+
+The first mention of the general ABC methodology is attributed to a seminal article on the adequacy of Bayesian statistics for scientific inference by \cite{rubin_bayesianly_1984}. There, ABC is used to illustrate the \emph{frequency behavior} of Bayesian posterior distributions across repeated experiments. The first practical applications of ABC algorithms were developed in the context of genetics in the 1990s. In \cite{pritchard_population_1999}, all key ingredients that we discuss below were already present: prior samples, summary statistics, a similarity metric, and a tolerance threshold. Historical overviews of these early developments can be found in \cite{beaumont_approximate_2002} and \cite{marin_approximate_2011}. ABC algorithms served as both a precursor and a source of inspiration for modern simulation-based inference (SBI) techniques. Understanding them provides conceptual insights into the specific challenges of SBI and informs the development of deep learning--based solutions.
+
+\medskip
+
+Simulation‑based inference (SBI) treats the likelihood \(p(\bx\mid\btheta)\) as
+\emph{implicit}: instead of evaluating it at a fixed observation \(\bxobs\),
+we only require a stochastic program.
+%
+\begin{equation}
+\bx=\textsc{Sim}(\btheta,\epsilon)\;,
+\qquad 
+\epsilon\sim p(\epsilon)\;,
+\end{equation}
+%
+that produces draws \(\bx\sim p(\bx\mid\btheta)\).
+Here \(\btheta\) are inference parameters of interest, while \(\epsilon\) represents internal randomness of the simulator (\fex\ measurement noise, general latent parameters as in Eq.~\eqref{eqn:likelihood_with_nuisance}, etc) and are \emph{not} inferred.\footnote{Note that we can think of the simulator either as a stochastic program \(\bx = \text{Sim}(\btheta)\),
+which returns a different \(\bx\) on each run, or as a deterministic function
+\(\bx = \text{Sim}(\btheta, \epsilon)\) where the internal randomness has been
+made explicit. Throughout these notes, we use both perspectives interchangeably.}
+
+
+The simulator defines the \emph{joint} or \emph{generative} model
+\(p(\bx,\btheta)=p(\bx\mid\btheta)p(\btheta)\).
+From it we can harvest a data set of \(N\) i.i.d.\ pairs
+
+\begin{equation}
+  \mathcal{S}= \bigl\{(\bx^{(n)},\btheta^{(n)})\bigr\}_{n=1}^{N},
+  \qquad
+  (\bx^{(n)},\btheta^{(n)})\sim p(\bx\mid\btheta)\,p(\btheta).
+\label{eq:sim_samples}
+\end{equation}
+
+\vspace{-0.5em}
+\[
+\mathcal{S}\quad
+\stackrel{\text{SBI}}{\rightarrow}\quad
+q_\phi(\btheta\mid\bx)
+\]
+
+\noindent
+\emph{Question addressed by SBI}:  
+given only the simulated sample set \(\mathcal{S}\),  
+how can we construct faithful approximations to statistical quantities, such as the approximations \(q_\phi(\btheta \mid \bx) \approx p(\btheta\mid\bx)\) of the true posterior?
+
+
+\subsection{Rejection ABC}
+\label{sec:found:abc:rejection}
+
+As discussed above, the goal is to infer \(p(\btheta \mid \bx)\) using samples from the joint distribution \(p(\bx, \btheta)\).
+Approximate Bayesian Computation (ABC) provides a simple likelihood-free approach: we select those \((\bx, \btheta)\) pairs from simulations for which \(\bx\) is sufficiently close to the observed data \(\bx_{\mathrm{obs}}\).
+
+To formalize this idea, ABC introduces a distance function \(d(\bx, \bx')\) that quantifies the similarity between two datasets.
+In our context, this distance is used to compare simulated data \(\bx\) to the observed data \(\bx_{\mathrm{obs}}\). A common choice is the squared Euclidean distance:
+%
+\begin{equation}
+    d(\bx, \bx')  = \|\bx - \bx'\|^2\;.
+\end{equation}
+%
+This function determines which simulations are considered acceptable. Small distances indicate a good match between simulated and observed data, while large distances suggest that the parameters used to generate \(\bx\) are unlikely to have produced \(\bx_{\mathrm{obs}}\).
+%
+The most basic variant of ABC is the accept/reject scheme known as \emph{rejection ABC}~\citep{pritchard_population_1999}.
+It proceeds by generating simulated pairs \((\bx, \btheta)\) and accepting only those for which \(d(\bx, \bx_{\mathrm{obs}}) \leq \epsilon\). This is illustrated formally in Algorithm~\ref{alg:ABC}.
+
+\begin{algorithm}[ht]
+\caption{Rejection Approximate Bayesian Computation}\label{alg:ABC}
+\begin{algorithmic}[1]
+\State \textbf{Input:}
+\State \hspace{\algorithmicindent} Observed data $\bxobs$
+\State \hspace{\algorithmicindent} Prior distribution $p(\btheta)$
+\State \hspace{\algorithmicindent} Likelihood model $p(\bx \mid \btheta)$
+\State \hspace{\algorithmicindent} Tolerance level $\epsilon$
+\State \hspace{\algorithmicindent} Number of samples $N$
+\State \textbf{Output:} Approximate posterior samples $\{\btheta^{(i)}\}_{i=1}^{N}$
+\State Initialize an empty set of accepted parameters $\Theta \gets \emptyset$
+\For{$i = 1$ to $N$}
+    \State Sample $\btheta^{*}$ from the prior $p(\btheta)$
+    \State Generate synthetic data $\bx^{*}$ from the model $p(\bx\mid \btheta^{*})$
+    \If{$d(\bx^{*}, \bxobs) \leq \epsilon$}
+        \State Accept $\btheta^{*}$: $\Theta \gets \Theta \cup \{\btheta^{*}\}$
+    \EndIf
+\EndFor
+\State \textbf{Return} $\Theta$
+\end{algorithmic}
+\end{algorithm}
+
+\medskip
+
+The rejection ABC algorithm yields \(\btheta\) samples that follow a conditional distribution defined through the acceptance criterion, which we can formally write as
+%
+\begin{equation}
+    p(\btheta \mid d(\bxobs, \bx) \leq \epsilon ) = \frac
+    {\int_{d(\bxobs, \bx) < \epsilon} d\bx\, p(\btheta \mid \bx) p(\bx)}
+    {\int_{d(\bxobs, \bx) < \epsilon} d\bx\, p(\bx)}\;.
+\end{equation}
+%
+In the limit \(\epsilon \to 0\), and under mild regularity conditions, the accepted samples asymptotically follow the true posterior distribution:
+%
+\begin{equation}
+    p(\btheta \mid d(\bxobs, \bx) \leq \epsilon )
+    \overset{\epsilon \to 0}{\to} p(\btheta \mid \bxobs)\;.
+\end{equation}
+%
+This limiting case highlights that ABC approximates the true posterior only in the idealized regime of vanishing \(\epsilon\), which is unattainable in practice. The need to accept samples with \(d(\bx_{\mathrm{obs}}, \bx) > 0\) is precisely what makes the method \emph{approximate}.
+
+\medskip
+
+The acceptance rate of the above algorithm for an observation \(\bxobs \in \mathbb{R}^d\) can be estimated as
+%
+\begin{equation}
+    A = \int_{d(\bxobs, \bx) < \epsilon} d\bx\, p(\bx) \approx \epsilon^d\, p(\bxobs)\;,
+\end{equation}
+%
+where the last step assumes that all \(d\) data dimensions contribute equally to the scaling with \(\epsilon\). This relation illustrates a key limitation of ABC: even in settings with moderately high-dimensional data $\bx$, the acceptance rate can become impractically low.  On the other hand, the dimensionality of the parameters $\btheta$, or of any other latent parameters, does not directly affect the acceptance rate---unless wide priors reduce the Bayesian evidence $p(\bxobs)$.
+
+\subsection{Data Summaries and Density-Based ABC}
+\label{sec:found:abc:summaries}
+
+The severe drop in acceptance rate in settings with high-dimensional data motivates a natural strategy: instead of comparing full data vectors $\bx$, one can compress the data into low-dimensional representations before computing distances.  
+
+In many practical applications, ABC relies on such handcrafted or learned summary statistics \(T(\bx) \in \mathbb{R}^k\), with \(k \ll d\), in order to improve acceptance efficiency.  In fact, even the earliest examples~\citep[\fex][]{pritchard_population_1999} relied already on the definition of suitable summary statistics. Ideally, these summaries retain all information relevant for inferring \(\btheta\), so that the ABC posterior remains faithful in the limit of small \(\epsilon\):
+%
+\begin{equation}
+    p(\btheta \mid d(\bs(\bxobs), \bs(\bx)) \leq \epsilon )
+    \underset{\bs(\cdot)\text{ sufficient for $\btheta$}}{\overset{\epsilon \to 0}{\to}}
+    p(\btheta \mid \bxobs)\;.
+\end{equation}
+%
+Compressing the representation of data $\bx$ in a way that still provides sufficient information about parameters $\btheta$ significantly increase the acceptance rate of rejection ABC, but plays also a critical role for modern SBI techniques in general.
+
+\medskip
+
+In rejection ABC, precise posteriors are obtained in the limit of a vanishing acceptance threshold, $\epsilon \to 0$, which cannot be taken because it implies a vanishing acceptance rate. This problem can be overcome by replacing the simple reject/accept step with density estimation~\citep[see, \fex][]{beaumont_approximate_2002, fan_approximate_2013}. 
+Classical methods along these lines can be denoted as \emph{density-based ABC}. 
+
+In density-based ABC, the generated \((\btheta, \bx)\) pairs are mapped to summaries \(\bs = T(\bx)\), and a density estimator \(q(\btheta, \bs)\) is fit to the resulting joint distribution. This density estimator can then be used to estimate the parameter posterior, formally given by
+%
+\begin{equation}
+    q_{\text{density-ABC}}(\btheta \mid \bxobs) = 
+    \frac{1}{Z}
+    q(\btheta, \bs(\bxobs))\;,
+\end{equation}
+%
+which can be sampled, \fex\ using Monte Carlo methods.
+
+\medskip
+
+Both the usage of summary statistics for data compression, as well as the adoption of density estimators for the purpose of precise posterior estimation, also play critical roles in modern approaches to SBI, where the task of identifying optimal data summaries and fitting flexible density estimator is done by neural networks.
+
+
+\section{Informative Data Summaries}
+\label{sec:found:summaries}
+
+\begin{quotation}
+    \textit{``[...] perfection is finally attained not when there is no longer anything to add, but when there is no longer anything to take away [...]''}
+
+   \hfill --- Antoine de Saint-Exupéry (1939), Wind, Sand and Stars
+\end{quotation}
+
+Data summaries play a crucial role in applying ABC
+---and simulation-based inference more generally---to real-world problems~\citep[see][for a review]{blum_comparative_2013}.
+By mapping high-dimensional observations onto lower-dimensional representations, they focus the comparison between simulated and observed data on the most relevant features and reduce the number of required simulation runs. This raises a key question that guides both our analytical understanding and the design of summary networks for neural SBI: under which circumstances, and how, can we reduce the full dataset $\bx$ to a summary $T(\bx)$ \emph{without} losing information \emph{relevant for inference} about the parameters $\btheta$?
+
+%Summary statistics aim to condense complex data while retaining the information most relevant for inferring $\btheta$. This aligns with the general goal of dimensionality reduction: simplifying data while preserving its informative content. In practice, informative low-dimensional summaries are rare outside idealized or low-dimensional scenarios. SBI methods therefore rely on approximately sufficient statistics, which strike a balance between computational efficiency and inference accuracy. 
+
+%In the following, we discuss formal notions of sufficiency based on the factorization theorem, information-theoretic perspectives including mutual and Fisher information, and practical considerations regarding summary dimensionality.
+
+\subsection{Foundations of Summary Construction}
+\label{sec:found:summaries:foundations}
+
+\cw{TODO: Read this carefully again including references.}
+
+\paragraph{Factorization theorem.} A key theoretical concept underlying the use of data summaries in SBI is the \emph{Fisher-Neyman factorization theorem}~\citep[see][for a pedagogical introduction]{casella_statistical_2002}.\footnote{The concept of sufficiency was introduced in \cite{fisher_mathematical_1922}, and further developed mathematically by \cite{neyman_use_1928, halmos_application_1949}.}
+For a given likelihood function $p(\bx \mid \btheta)$, a summary $T(\bx)$ is \emph{sufficient} (lossless) for $\btheta$ if and only if there exist functions $h$ and $g$ such that
+%
+\begin{equation}
+    p(\bx \mid \btheta) = h(\bx)\, g(\btheta, T(\bx))\;.
+\end{equation}
+%
+This means that all the dependence of $\bx$ on $\btheta$ is mediated through the summary $T(\bx)$: once $T(\bx)$ is known, the rest of the data contains no further information about $\btheta$. The term $g$ captures the coupling between parameters and data, while $h$ is purely a function of the observations. 
+
+While this condition offers a clear theoretical benchmark, it is usually impractical to verify in complex models—especially in simulation-based settings. 
+More importantly, our interest is not merely in whether sufficient statistics exist, but in identifying \emph{minimally sufficient} summaries: the most compressed representations that still retain all information relevant for inferring $\btheta$.
+
+\paragraph{Exponential families.} To explore the consequences of the factorization theorem and the notion of \emph{minimally} sufficient summaries, we consider likelihood models that belong to the exponential family~\citep[see][for a comprehensive overview]{brown_fundamentals_1986}. This class includes many common distributions, such as the Gaussian, Poisson, Bernoulli, and exponential distributions. Exponential families frequently arise in contexts where measurements are aggregated or averaged over time and/or space, either inherently or as a modeling choice.\footnote{This connection is formalized by the Pitman-Koopman-Darmois theorem~\citep{brown_fundamentals_1986}, which states that under mild regularity conditions, only exponential family distributions admit finite-dimensional sufficient summaries that do not depend on the sample size.}
+
+All likelihood functions that belong to the exponential family take the general form
+%
+\begin{equation}
+    p(\bx \mid \btheta)
+    = h(\bx)\, \exp\left( \boldeta(\btheta)^T \bphi(\bx) - A(\btheta) \right)\;,
+\end{equation}
+%
+where $\bphi(\bx)$ are often referred to as canonical data summaries, and $\boldeta(\btheta)$ as the natural parameters. The coupling between data $\bx$ and parameters $\btheta$---corresponding to the function $g$ in the factorization theorem---is entirely mediated through the scalar product between these two quantities.
+
+
+Common examples include Gaussian models with fixed covariance, where $\bx \sim \mathcal{N}(\bmu(\btheta), \Sigma)$, leading to $\bphi(\bx) = \bx$ and $\boldeta(\btheta) = \Sigma^{-1} \bmu(\btheta)$; Poisson models for counting experiments, where $\bx \sim \text{Pois}(\bmu(\btheta))$, with $\bphi(\bx) = \bx$ and $\boldeta(\btheta) = \log \bmu(\btheta)$; and models for variance inference, such as $\bx \sim \mathcal{N}(0, \Sigma(\btheta))$, where the summaries are quadratic products $x_i x_j$ and the natural parameters are entries of the precision matrix $\Sigma^{-1}(\btheta)$. These familiar cases illustrate how exponential families naturally encompass many statistical models.
+
+\medskip
+
+The question, then,  is how to construct low-dimensional   ---and potentially \emph{minimal}---summaries $T(\bx)$ given the canonical summaries $\bphi(\bx)$ and the natural parameters $\boldeta(\btheta)$. Technically, a  \emph{minimal} sufficient statistics is one  that is  a function of all  other sufficient  statistics~\citep{lehmann_completeness_1950}. This has been rigorously developed~\citep[see][for an overview]{lehmann_theory_1998}, but we resort here to a few examples.
+
+Consider, for instance, the special case of a Gaussian model where the mean depends linearly on the parameters, $\bmu(\btheta) = \sum_{i=1}^k \theta_i \bmu_i$. The corresponding sufficient summaries are $T_i(\bx) = \bx^T \Sigma^{-1} \bmu_i$, i.e., scalar products between the whitened data and model templates. Notably, the dimension of the summary $\bT(\bx) \in \mathbb{R}^k$ depends on the number of model parameters $k$, not on the dimensionality of the data.
+
+More generally, in exponential family models, low-dimensional sufficient summaries can be obtained by projecting $\bphi(\bx)$ onto the space spanned by the natural parameters:
+%
+\begin{equation}
+    T(\bx) = \mathbb{P}_S \bphi(\bx)
+    \quad \text{with} \quad
+    S = \operatorname{span}\{\boldeta(\btheta) \mid \btheta \in \Theta\}\;.
+\end{equation}
+%
+This highlights that, in the case of exponential families, the intrinsic dimensionality of a compressed sufficient summary is governed by the variation of the model across parameter space—not by the original dimensionality of the data. This projection compresses $\bphi(\bx)$ just enough to retain the directions in which $\btheta$ influences the distribution, discarding those that are uninformative for inference.
+
+\paragraph{Exponential families as a guide.}
+While exponential families offer valuable structure, most real-world simulation models do not strictly belong to this class.
+Common examples include hierarchical models, partial marginalization over latent variables or parameters, and mixture models—such as those incorporating different types of noise. These operations typically lead to likelihoods that no longer admit a finite-dimensional sufficient statistic or factorize in exponential family form.
+
+This highlights an important limitation: in many real-life applications, exact finite-dimensional sufficient statistics do not exist, or at least cannot be derived in closed form. As a result, one is generally forced to work with \emph{approximately} sufficient summaries that balance a trade-off between computational tractability and inferential accuracy. 
+
+Nevertheless, exponential family models remain highly valuable as idealized cases. As demonstrated above, they offer conceptual guidance for constructing informative low-dimensional summaries and can  inform the design of neural network architectures with inductive biases that promote generalization---even when applied to models that only approximately follow exponential-family structure.
+
+
+\subsection{Quantifying Informativeness}
+\label{sec:found:summaries:informativeness}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\linewidth]{figures/Venn.pdf}
+    \caption{Information-theoretic decomposition in simulation-based inference. The total mutual information \(\mathcal{I}(\bx, \btheta)\) (green) quantifies all available information about parameters. A summary \(T(\bx)\) retains \(\mathcal{I}(T(\bx); \btheta)\), with the loss corresponding to the expected divergence between the full and summary-conditioned posteriors, \(\mathbb{E}_{p(\bx)}[D_{\mathrm{KL}}(p(\btheta \mid \bx) \mid\mid p(\btheta \mid T(\bx)))]\). The conditional entropy \(\mathcal{H}(T(\bx) \mid \btheta)\) reflects uninformative variability in the summary.}
+    \label{fig:mutual_information }
+\end{figure}
+
+As discussed in the previous subsection, reducing data to low-dimensional summaries typically leads to some loss of information. The goal in constructing approximately sufficient summaries is to minimize this information loss as much as possible. Ideally, the loss should only affect regions of the likelihood function $p(\bx \mid \btheta)$ where the likelihood is negligible, and hence does not meaningfully contribute to the inference of $\btheta$. To quantify this, we need a principled way to measure how much \emph{information} an observation $\bx$ carries about the parameters $\btheta$.
+
+\paragraph{Mutual information.} A good starting point for quantifying the loss of relevant information is the concept of \emph{mutual information} \citep[see][for an introduction to information theory]{cover_elements_2006}.
+Mutual information provides a general measure of how much information is shared between two random variables—in this case, between $\btheta$ and $\bx$—without requiring specific assumptions about the form of the likelihood or the prior.  
+It is defined as
+\begin{equation}
+    \mathcal{I}(\btheta; \bx) 
+    \equiv \mathbb{E}_{p(\btheta, \bx)}\left[\log \frac{p(\btheta, \bx)}{p(\btheta)p(\bx)}\right]\;,
+\end{equation}
+where the joint distribution $p(\btheta, \bx)$ is compared to the product of marginals $p(\btheta)p(\bx)$. Intuitively, $\mathcal{I}(\btheta; \bx)$ quantifies the expected reduction in uncertainty about $\btheta$ after observing $\bx$.
+
+To interpret the concept of mutual information, it is helpful to discuss how information content and information gain connect to (differential) \emph{entropy}~\citep{shannon_mathematical_1948}
+\begin{equation}
+    \mathcal{H}[p(\btheta)] \equiv \bbE_{p(\btheta)} \bigl[-\log p(\btheta)\bigr]\;.
+\end{equation}
+Entropy quantifies how ``spread out'' or uncertain a random variable is.  
+For instance, a univariate Gaussian distribution with variance $\sigma^2$ has differential entropy $\mathcal{H} = \tfrac{1}{2}\,\log\bigl(2\pi e\,\sigma^2\bigr)$.
+In contrast, for a discrete random variable with $N$ uniformly likely outcomes, the entropy is $\log(N)$.
+
+From an information-theoretic perspective, the entropy of a parameter $\btheta$ quantifies our uncertainty before observing any data.  
+The mutual information then measures the expected amount by which this uncertainty is reduced after seeing $\bx$ (in bits or nats).\footnote{%
+    The unit depends on the logarithm's base: natural logarithms yield information in \emph{nats}, while base-2 gives \emph{bits}.
+    For example, learning the value of a uniformly distributed 8-bit integer yields 8 bits of information, corresponding to $\log(256) \approx 5.5$ nats.
+}
+This reduction is expressed via
+\begin{equation}
+    \mathcal{I}(\bx;\,\btheta)
+    =
+    \mathcal{H}[p(\btheta)]
+    -
+    \mathbb{E}_{p(\bx)} \bigl[\mathcal{H}[p(\btheta \mid \bx)]\bigr].
+\end{equation}
+Essentially, we compare the parameter entropy before observing $\bx$ to the expected posterior entropy after observing $\bx$.  
+If measuring $\bx$ significantly decreases the entropy of $\btheta$, then $\bx$ provides a substantial information gain about $\btheta$.  
+
+\medskip
+
+Generally, mutual information satisfies the inequality
+%
+\begin{equation}
+    \mathcal{I}(\btheta; \bx) \geq 0\;,
+\end{equation}
+%
+with equality if and only if $\btheta$ and $\bx$ are statistically independent. In that case, $p(\btheta, \bx) = p(\btheta)p(\bx)$, and the posterior becomes equal to the prior, $p(\btheta \mid \bx) = p(\btheta)$, implying that observing $\bx$ provides no information about the parameters $\btheta$.
+
+As a simple example, consider the case where both $\btheta$ and $\bx$ are scalar Gaussian variables with unit variance, so that the joint distribution $p(\btheta, \bx)$ is a bivariate normal. In this case, mutual information reduces to $\mathcal{I}(\btheta; \bx) = -\frac{1}{2} \log(1 - \rho^2)$, where $\rho$ is the correlation coefficient between $\btheta$ and $\bx$. This expression provides a direct and intuitive link between statistical dependence and information content. \cw{TODO: check math}
+
+
+\paragraph{Information processing inequality.}
+
+In general, no deterministic or stochastic transformation of $\bx$ can increase the information it contains about $\btheta$.  
+Hence, replacing $\bx$ with a summary $T(\bx)$ often entails some loss of information, an effect captured by the \emph{data-processing inequality}~\citep{cover_elements_2006}
+\begin{equation}
+    \mathcal{I}(\btheta; \bx) \geq \mathcal{I}(\btheta; T(\bx)).
+\end{equation}
+This states that $T(\bx)$ cannot contain more information about $\btheta$ than $\bx$ itself.  
+When the inequality is saturated, there is no information loss, and $T(\bx)$ is a \emph{sufficient} summary.  
+In that case, $T(\bx)$ also satisfies the Neyman-Fisher factorization theorem from the previous subsection~\citep{kullback_information_1959, cover_elements_2006}.
+
+Maximizing mutual information provides a principled approach to finding approximately sufficient summaries.  
+Because mutual information is computed as an expectation under $p(\btheta, \bx)$, it prioritizes regions where $p(\bx \mid \btheta)$ is large.  
+This naturally focuses on the portions of parameter–data space that matter most for inference, while assigning less weight to regions in the likelihood tails.
+
+\bigskip
+
+\paragraph{Connection to Fisher information.}
+
+A fundamentally different, though related, notion of ``information'' that often appears in the SBI literature is \emph{Fisher information}~\citep{fisher_mathematical_1922, lehmann_theory_1998}. It is based on the \emph{score function}, defined as
+\[
+    \bs(\btheta;\,\bx)
+    \equiv
+    \nabla_{\btheta}\,\log p(\bx \mid \btheta).
+\]
+Intuitively, the more steeply the likelihood changes with respect to $\btheta$, the more informative the observation $\bx$ is about the parameter.  
+Conversely, if the likelihood is flat in $\btheta$, the data is uninformative.  
+In practice, the score function is typically evaluated at a reference point $\btheta^*$. Its expected value vanishes under the model,
+\[
+    \bbE_{p(\bx \mid \btheta^*)}[\bs(\btheta^*;\,\bx)] = 0,
+\]
+so the natural way to measure its informativeness is through its covariance.
+
+This leads to the definition of the \emph{Fisher information matrix} at $\btheta^*$:
+\begin{equation}
+    \mathcal{J}(\btheta^*)
+    \equiv
+    \bbE_{p(\bx \mid \btheta^*)}
+    \left[
+        \bs(\btheta^*;\,\bx)^T\,\bs(\btheta^*;\,\bx)
+    \right].
+\end{equation}
+According to the Cramér–Rao bound, no unbiased estimator of $\btheta$ can have a variance smaller than the inverse of $\mathcal{J}(\btheta^*)$.  
+In the large-sample limit, the posterior often approximates a Gaussian with covariance matrix given by the inverse Fisher information, so $\mathcal{J}(\btheta^*)$ controls the asymptotic uncertainty of parameter estimates.
+
+To connect this to mutual information, note that in the large-sample regime (\textit{i.e.}, when the dataset is large enough for the posterior to become sharply peaked and approximately Gaussian), the locally averaged posterior entropy satisfies~\citep[see][for a similar discussion]{clarke_information-theoretic_1990}
+%
+\begin{equation}
+    \bbE_{p(\bx \mid \btheta^*)} \bigl[\mathcal{H}[p(\btheta \mid \bx)]\bigr]
+    \approx
+    \tfrac{1}{2}\,\log\det
+    \bigl(
+        2\pi\, \mathcal{J}^{-1}(\btheta^*)
+    \bigr).
+\end{equation}
+\cw{TODO: Double-check}
+Under this approximation, minimizing posterior entropy corresponds to maximizing the determinant of the Fisher information matrix.  
+This implies that, in the Gaussian limit, maximizing mutual information is approximately equivalent to maximizing Fisher information.  
+It is important to note, however, that Fisher information is a local quantity—defined at a specific parameter value $\btheta^*$—and reflects only the local curvature of the likelihood.  
+In contrast, mutual information captures global dependence between $\btheta$ and $\bx$ and remains well-defined in discrete, multi-modal, or non-differentiable settings where the Gaussian approximation does not hold.
+
+- cite \cite{charnock_automatic_2018} for information maximizing neural networks
+
+%similar to https://en.wikipedia.org/wiki/Mutual_information#/media/File:Figchannel2017ab.svg
+
+\subsection{How Many Summaries Are Enough?}
+\label{sec:found:summaries:dimensions}
+
+We now revisit the question of how many dimensions an approximately sufficient summary must have, even when no strictly low-dimensional sufficient statistic exists.  
+Intuitively, the required dimensionality relates to how many parameters are needed to describe the posterior distribution $p(\btheta \mid \bx)$ across relevant data.  
+While formal results are limited, we can gain insight by rewriting the mutual information in a convenient form.
+
+\medskip
+
+The mutual information between $\btheta$ and a compressed representation $T(\bx)$ can be written as~\citep{cover_elements_2006}
+\begin{equation}
+    \mathcal{I}(T(\bx);\;\btheta)
+    =
+    \mathcal{I}(\bx;\;\btheta)
+    -
+    \bbE_{p(\bx)}
+    \bigl[
+        D_{\mathrm{KL}}
+        \bigl(
+            p(\btheta \mid \bx) 
+            \,\big\|\, 
+            p(\btheta \mid T(\bx))
+        \bigr)
+    \bigr],
+\end{equation}
+where $D_{\mathrm{KL}}(p \,\|\, q)$ denotes the Kullback-Leibler (KL) divergence,
+\begin{equation}
+    D_{\mathrm{KL}}(p(\btheta) \,\|\, q(\btheta))
+    \equiv
+    \bbE_{p(\btheta)}
+    \left[
+        \log \frac{p(\btheta)}{q(\btheta)}
+    \right],
+\end{equation}
+a nonnegative measure of dissimilarity between distributions.\footnote{The non-negativity is a consequence of the Gibbs' inequality, see \fex, \cite{mackay_information_2003}.}  
+Since mutual information itself is a KL divergence between joint and product distributions, it is natural that KL reappears here.
+
+This decomposition shows that $T(\bx)$ should preserve the aspects of $\bx$ most predictive of the full posterior.  
+If the posterior is nearly Gaussian, a small number of summary components—often related to the dimensionality of $\btheta$—may suffice.  
+More generally, if the posterior's shape is fully determined by a low-dimensional feature of the data (e.g., its mean), then \emph{a single summary per parameter may be enough}.  
+
+However, when the posterior shape itself varies with $\bx$, more summary dimensions are required to capture these changes.  
+One caveat is that KL-based objectives tend to emphasize regions of high posterior density, which can lead to underrepresentation of tail structure—potentially requiring additional summary dimensions to capture rare but important features.
+While this reasoning is heuristic, it aligns with empirical findings and provides practical guidance for summary design.  
+In practice, including some redundancy in $T(\bx)$ can also improve training dynamics and robustness, particularly when summaries are learned using neural networks.
+
+
+\begin{figure}[t]
+\centering
+    \includegraphics[width=0.80\linewidth]{figures/fig2.drawio.pdf}
+\caption{
+Mutual information between parameters and data before and after compression. 
+Equality $\mathcal{I}(\boldsymbol{\theta}; \mathbf{x}) = \mathcal{I}(\boldsymbol{\theta}; T(\mathbf{x}))$ characterizes sufficient summaries. 
+In general, the KL term in the decomposition quantifies information loss relevant for inference.
+}
+\label{fig:summary_mi}
+\end{figure}
+
+
+%\input{drafts/toy_projectile_simulator.tex}
+
+
+\section{Key Challenges in Simulation-Based Inference}
+\label{sec:found:challenges}
+
+The conceptual flexibility of SBI comes at the cost of a range of technical challenges that must be addressed to make SBI methods efficient, robust, and scientifically reliable. Below, we summarize key challenges, and how they can be addressed with the modern neural solutions that we will be discussed in the remainder of these lecture notes.
+
+\cw{TODO: Read at the end again and link to various subsections exactly}
+
+\begin{itemize}
+
+\item \textbf{Constructing informative data summaries.}  
+ABC and related methods rely on low-dimensional summaries \(T(\bx)\) to avoid the curse of dimensionality. Designing these summaries by hand is difficult and problem-specific. Neural approaches can instead learn them automatically end-to-end from simulation data---\fex\ using mutual or Fisher information, contrastive objectives, and encoder architectures like CNNs, DeepSets, and graph networks.  
+We discuss these mechanisms in Sec.~\ref{chap:methods}.
+
+\item \textbf{Modeling parameter–data relationships in a tractable way.}  
+Classical ABC is computationally wasteful and must be rerun for each new observation. Neural SBI solves this by amortizing inference—learning reusable mappings from data to posteriors. Methods include neural density estimators (e.g., normalizing flows) and score- or diffusion-based surrogates.  
+These models are covered in Secs.~\ref{sec:density_estimation}, \ref{sec:score_models}, and \ref{sec:transforming_distributions}.
+
+\item \textbf{Validating neural posterior approximations.}  
+Unlike classical inference, neural SBI produces learned posteriors \(\tilde p(\btheta \mid \bx)\) whose accuracy is not guaranteed. We must assess their calibration and coverage using simulation-based diagnostics, classifier comparisons, and posterior predictive checks.  
+We discuss these tools in Sec.~\ref{sec:validation}, particularly \ref{sec:diagnostics} and \ref{sec:calibration}.
+
+\item \textbf{Detecting and addressing model mis-specification.}  
+When real data differ from the assumptions encoded in the simulator (e.g., incorrect noise or selection effects), inference results can be biased. We introduce methods to test model fit and detect mis-specification—such as residual checks, classifier-based discrepancy measures, and internal consistency tests.  
+See Sec.~\ref{sec:mis_specification}.
+
+\item \textbf{Building robustness against known mismatch.}  
+In many applications, mis-specification is anticipated and must be accommodated. Robust SBI methods aim to absorb such deviations—e.g., through summary learning with robustness objectives or uncertainty-aware posteriors.  
+We explore these strategies in Sec.~\ref{sec:model_uncertainty}.
+
+\item \textbf{Focusing simulation effort on informative regions.}  
+Classical rejection-based approaches waste simulations far from the posterior. Modern sequential SBI strategies guide simulation adaptively toward informative regions using active learning and adaptive proposals.  
+These methods are introduced in Sec.~\ref{sec:sequential_sbi}.
+
+\end{itemize}

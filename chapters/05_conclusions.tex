@@ -1,0 +1,77 @@
+\chapter{Concluding Remarks}
+\label{chap:conclusions}
+
+\begin{quotation}
+\textit{``If you can't solve a problem, then there is an easier problem you can solve: find it.''}
+
+\hfill --- George Pólya, How to Solve It (1945)
+\end{quotation}
+
+\noindent
+These lecture notes have introduced simulation-based inference as a principled framework for parameter estimation when likelihoods are intractable but forward simulation is feasible. The power of this approach lies in its flexibility: by replacing analytic likelihood evaluation with learned approximations, SBI enables inference for complex generative models that would be impossible to handle with traditional methods.
+
+However, this flexibility comes at a cost. Likelihood-based methods provide access to the \textit{exact} posterior (explicitly via symbolic computation, or implicitly via MCMC sampling). Simulation-based methods provide access only to an \textit{approximate} posterior $q_\phi(\btheta|\bx) \approx p(\btheta|\bx)$, learned from finite simulation data. This approximation must be carefully validated---training convergence does not guarantee correctness.
+
+\section{Main Takeaways}
+
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[\textbf{Exact versus approximate posteriors}]
+Likelihood-based methods provide access to the \textit{exact} posterior (explicitly via symbolic computation, or implicitly via MCMC sampling). Simulation-based methods provide access only to an \textit{approximate} posterior $q_\phi(\btheta\mid\bx) \approx p(\btheta\mid\bx)$, learned from finite simulation data. This approximation must be carefully validated---training convergence does not guarantee correctness.
+
+\item[\textbf{Three types of epistemic uncertainty guide diagnosis}]
+Model misspecification (Type A), lossy compression (Type B), and inference approximation (Type C) represent distinct failure modes requiring different validation strategies. Most forward-backward tests detect Type C but are blind to Type B. Type A requires model criticism that goes beyond posterior validation. Understanding which uncertainty types your application is vulnerable to guides diagnostic choices.
+
+\item[\textbf{Different inference approaches make different trade-offs}]
+NPE enables end-to-end learning of information-maximizing summaries but requires expressive density estimators and bakes in the prior. NLE provides prior-independent likelihoods but cannot learn summaries end-to-end and requires MCMC for posterior sampling. NRE offers prior-independence with end-to-end learning but struggles in high dimensions. The choice depends on whether you need prior flexibility, have tractable likelihoods for validation, or can tolerate MCMC sampling costs.
+
+\item[\textbf{Diagnostic strategies must be combined}]
+No single test suffices. Forward-backward tests (SBC, coverage, C2ST) detect inference approximation but miss information loss. Reference posterior comparisons reveal both but require tractable ground truth. Model criticism (PPCs, robustness checks) identifies misspecification but cannot validate inference algorithms. Many of these can be unified through rank-based testing with different ordering functions, but effective validation requires combining complementary approaches tailored to your problem's failure modes.
+
+\item[\textbf{Data compression requires careful design}] 
+When exact sufficient statistics do not exist, learned summaries introduce a trade-off between computational tractability and information loss. Information-theoretic principles (mutual information, data processing inequality) guide summary construction and quantify compression costs. When simulator uncertainty is anticipated, summaries must be explicitly designed for robustness---neural methods do not automatically inherit robustness properties. The choice of what information to discard is often as important as what to retain.
+
+\end{description}
+
+\section{Open Challenges and Future Directions}
+
+
+Despite rapid progress, several fundamental challenges remain:
+
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[\textbf{Scaling diagnostics to high dimensions}]
+Some validation methods become weak or computationally prohibitive in moderate to high dimensions. While rank-based tests remain tractable through one-dimensional projections, systematically detecting Type B uncertainties in high-dimensional settings is not well established. Moving beyond standard HPDR coverage diagnostics and developing comprehensive testing strategies---including efficient projection-based workflows and their implementation in standard software tools---remains an active challenge.
+
+\item[\textbf{Reliable detection of information loss}]
+Type B uncertainties are largely invisible to standard calibration tests like SBC and coverage diagnostics. Model-based rank diagnostics (Section~\ref{sec:model_based_ranks}) offer promise but require tractable likelihood evaluation, which limits their applicability. Finding general-purpose tests for information loss that work without explicit model access remains an open problem.
+
+\item[\textbf{Practical robust inference}]
+The information-theoretic framework for robust summary learning (Section~\ref{sec:robust_summaries}) provides clear conceptual guidance, but translating these principles into standardized, practical implementations requires further development. Moreover, while likelihood-based inference benefits from decades of established model misspecification diagnostics, comparable techniques for SBI are still emerging. Building consensus around diagnostic workflows and best practices for model criticism in simulation-based settings remains an active area of development.
+
+\item[\textbf{Beyond amortization}]
+The enforced amortization in neural SBI---learning $p(\btheta\mid \bx)$ for all $\bx$---may be wasteful when only a single observation matters. Sequential methods that adapt to specific observations show promise but introduce new challenges: designing efficient proposals, establishing stopping criteria, and developing robust software implementations. Particularly challenging are hierarchical models with shared parameters across observations, transdimensional models with variable parameter dimensionality, and non-parametric priors where the parameter space adapts to data. Developing efficient inference strategies for these structured scenarios remains an open frontier.
+\end{description}
+
+\section{Resources for Further Learning}
+
+\cw{TODO: Improve this list}
+
+\textbf{Software implementations:}
+\begin{itemize}
+\item \texttt{sbi} (Python): Comprehensive toolkit for neural SBI methods [\url{https://sbi-dev.github.io/sbi/}]
+\item \texttt{sbibm}: Benchmark problems and baseline results [\url{https://sbi-benchmark.github.io/}]
+\item \texttt{lampe}: Lightweight alternative implementation [\url{https://github.com/probabilists/lampe}]
+\end{itemize}
+
+\textbf{Key review articles:}
+\begin{itemize}
+\item Cranmer et al. (2020): ``The frontier of simulation-based inference'' [arXiv:1911.01429]
+\item Papamakarios \& Murray (2016) and Hermans et al. (2020): Foundational papers on NPE and NRE
+\item Talts et al. (2018): Simulation-based calibration methodology
+\end{itemize}
+
+\textbf{On diagnostics and validation:}
+\begin{itemize}
+\item Lemos et al. (2023): Sampling-based accuracy testing (TARP)
+\item Modr\'{a}k et al. (2025): Comprehensive review of rank-based diagnostics
+\item Cannon et al. (2022): Model misspecification in neural SBI
+\end{itemize}

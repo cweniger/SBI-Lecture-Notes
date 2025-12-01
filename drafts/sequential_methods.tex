@@ -1,0 +1,192 @@
+\section{Sequential methods and adaptive learning}
+\label{sec:sequential_sbi}
+
+\begin{quotation}
+\textit{``When solving a problem of interest, do not solve a more general problem as an intermediate step. Try to get the answer that you really need but not a more general one.''}
+
+\hfill --- \cite{vapnik_estimation_2006}
+\end{quotation}
+
+%\cw{TODOREF - Sequential SBI}
+
+\subsection{Basic idea}
+
+One characteristics of simulation-based inference methods is that they typically lead to \textit{amortization} of inference results: rather than providing the posterior approximation for a specific observation $\bxobs$ of interest, they provide an inference machine that learned how to map \textit{any} data on inference results.  In some cases, where one is just interested in a cost-efficient analysis of a single observation, that might be not desirable.  In fact, obtaining precision results in these settings can require immense amounts of training data and highly flexible network architectures.
+
+The idea is sequential inference is to focus (sequentially) on the range of parameters $\bz$ that are relevant for a specific observation $\bxobs$. This is done by replacing during the generation of training data the actual prior distribution $p(\bz)$ with a proposal distribution $\tilde p(\bz)$ that is somehow more emphasizing the interesting parameter for a given observation.  A wide range of strategies for selecting appropriate proposal distributions, and for undoing the damage done by using the `wrong' distribution for the prior, have been proposed in the literature.  Essentially, for any of the algorithms discussed above, there is a sequential version.
+
+We sample targeted training data
+%
+$$
+\mathcal{D} = \{(\boldsymbol{\theta}_i, \mathbf{x}_i)\}_{i=1}^N
+\;,\quad
+\btheta, \bx \iidsim p(\bx \mid \btheta) \tilde p(\btheta)
+$$
+%
+$$
+\text{proposal} \quad \tilde p(\btheta) \quad 
+\text{approximates target posterior}
+\quad
+\left. p(\btheta \mid \bx) \right|_{\bx = \bx_o}
+$$
+%
+When learning the posterior from this training data, we find
+$$
+p(\btheta \mid \bx) \simeq 
+\frac1{Z(\bx)}
+q_\phi(\btheta \mid \bx)
+\frac{p(\btheta)}{\tilde p(\btheta)}
+%\frac{\tilde p(\bx)}{p(\bx)}
+$$
+
+
+\subsection{Strategies for sequential SBI}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\linewidth]{figures/Sequential.png}
+    \caption{Simple visualization of how focusing the prior parameter range increases the simulation density in the region with high likelihood.}
+    \label{fig:sequential}
+\end{figure}
+
+when learning the likelihood function
+$$
+p(\btheta \mid \bx) \simeq 
+\frac1{Z(\bx)}
+q_\phi(\bx \mid \btheta)
+p(\btheta)
+%\frac{p(\btheta)}{p(\bx)}
+%\frac{\tilde p(\bx)}{p(\bx)}
+$$
+
+When learning the ratio
+$$
+p(\btheta \mid \bx) \simeq 
+%\frac1{Z(\bx)}
+r_\phi(\bx; \btheta)
+p(\btheta)
+%\frac{p(\btheta)}{p(\bx)}
+%\frac{\tilde p(\bx)}{p(\bx)}
+$$
+
+Common choices are posterior
+$$
+\tilde p(\btheta) = q_\phi(\btheta \mid \bx)
+$$
+or combination of posterior and prior
+$$
+\tilde p(\btheta) = \sqrt{
+q_\phi(\btheta \mid \bx)
+p(\btheta)
+}
+$$
+or truncated prior
+$$
+\tilde p(\btheta) = \frac1Z 
+p(\btheta) \mathbb{1}( q_\phi(\bx \mid \btheta) > \epsilon)
+$$
+
+Problem with marginalization: If we split parameters $\btheta = (\bphi, \blambda)$, then the learned marginal likelihood function becomes
+$$
+q_\phi(\bphi \mid \bx) 
+\simeq \int d\blambda \;
+p(\bx \mid \bphi, \blambda) 
+\tilde p(\bphi \mid \blambda)
+$$
+and generally assume a proposal function $\tilde p(\btheta) = \tilde p(\bphi) p(\blambda \mid \bphi)$.
+
+
+
+\paragraph{Sequential Neural Likelihood/Ratio Estimation (SNLE \& SNRE).} 
+Sequential techniques are relatively easy to implement in situations where we approximate the data likelihood, $q_\phi(\bx \mid \bz) \approx p(\bx \mid \bz)$, with a neural network.  The reason is that the data likelihood does not formally depend on the prior distribution.  We expect in the end that
+%
+\begin{equation}
+    q_\phi(\bx \mid \bz) = \tilde q_\phi(\bx \mid \bz)
+    \quad \text{in high-probability regions of} \quad
+    \tilde p(\bz)\;.
+\end{equation}
+%
+Outside of the support of $\tilde p(\bz)$, the behaviour of $\tilde q_\phi(\bx \mid \bz)$ will be undefined.  By focusing training data on the parameters with a high data likelihood, one can effectively increase the density of training data in the region of interest.
+%
+Although the full model likelihood is prior independent, marginal likelihoods are generally not, and in general $q_\phi(\bx \mid z_i) \neq \tilde q_\phi(\bx \mid z_i)$.
+
+A very similar behaviour can be observed for likelihood-to-evidence ratio estimation, where we train a network to approximate $\log f_\phi(\bx; \bz) \approx p(\bx | \bz)/p(\bx)$. Since the likelihood is independent of the proposal distribution, and only the parameter-independent evidence $p(\bx)$ is affected, we find that
+%
+\begin{equation}
+    \log f_\phi(\bx; \bz) = \log \tilde f_\phi(\bx; \bz) + \text{const}
+    \quad \text{in high-probability regions of} \quad
+    \tilde p(\bz)\;.
+\end{equation}
+%
+However, the same limitations apply in the case of training marginals.
+
+\paragraph{Sequential Neural Posterior Estimation (SNPE).}
+
+When performing neural posterior estimation as discussed above, the proposal distribution $\tilde p(\bz)$ affects the outcome.
+
+Instead of using the prior $p(\mathbf z)$, it can be useful to use a proposal distribution $\tilde p(\mathbf z)$ that focuses on likely regions of the data given a specific observation $\mathbf x_o$.  Changing the prior has an effects on the posterior, which can be undone by multiplying the variational posterior with the prior-to-proposal ratio,
+%
+\begin{equation}
+    q_\phi(\mathbf z \mid \bxobs)
+    = \frac1Z
+    \tilde q_\phi(\mathbf z \mid \bxobs)
+    \frac{p(\mathbf z)}{\tilde p(\mathbf z)}
+    \quad \text{in high-probability regions of} \quad
+    \tilde p(\bz)\;.
+\end{equation}
+%
+The partition function, $Z$, has formally the value $\frac{p(\mathbf x_o)}{\tilde p(\mathbf x_o)}$, which is usually unknown.  MCMC type techniques are typically used to sample from the posterior distribution in that case.
+
+we see that the effect can be corrected for by multipling the inferred posterior by the factor $p(\mathbf z)/\tilde p(\mathbf z)$.  In general the evidence ratio will not be known.  This works well as long as the correction factor $p(\mathbf z) / \tilde p(\mathbf z)$ remains small over the range of the posterior.
+
+Like for NLE above, it is relevant to observe that correction is not possible anymore if instead marginal posteriors are generated. In general, we cannot reconstruct  $q_\phi (z_i \mid \bxobs)$ from  $\tilde q_\phi (z_i \mid \bxobs)$, even if the prior functions and the proposal distribution is tractable and known.
+
+\paragraph{Posterior approximation.}
+
+A number of $R$, rounds with $\tilde p_1(\mathbf z) = p(\mathbf z)$, and $\tilde p_{i}(\mathbf z) = q_{\phi, i-1}(\mathbf z \mid \mathbf x_o)$ for $i = 2, \dots, R$.
+
+\paragraph{Prior truncation strategies.}
+
+We can see from Eq.~\eqref{eqn:SNPE}, that in cases where $p(\bz)/\tilde p(\bz)$ is constant over the high-probability region of $\tilde q_\phi(\bz \mid \bxobs)$, the expected correction is expected to cancels exactly with $Z$.  Sampling from $\tilde q_\phi(\bx \mid \bxobs)$, which can be done efficiently for instance when $\tilde q_\phi$ was modeled as a normalizing flow, will directly generate samples from the learned posterior $p(\bz \mid \bxobs)$.
+
+This can be also seen at the level of marginal likelihoods.  Let us consider.
+%
+\begin{equation}
+    \tilde p(\bx \mid z_i) = \int d\bz_{-i}\; p(\bx \mid \bz) \tilde p(\bz_{-i})\;.
+\end{equation}
+%
+If the proposal distribution $\tilde p(\bz) \propto p(\bz)$ in regions where the likelihood $p(\bx \mid \bz)$ contributes significantly to the integration, we find that $\tilde p(\bx \mid z_i) \propto p(\bx \mid z_i)$.  Two options to achieve this is to
+%
+\begin{equation}
+    \tilde p(\bz) = \frac1Z \mathbb{1}( \bz \in \Gamma) p(\bz)
+\end{equation}
+Here, the high-likelihood region $\Gamma \subset\Omega$ can be for instance selected as
+%
+\begin{equation}
+    \Gamma = \{ \bz \in \Omega \mid q_\phi(\bx | \bz) > \epsilon\}\;,
+\end{equation}
+%
+with some suitably small parameter for $\epsilon$.  Another option is based on tempered likelihood functions,
+%
+\begin{equation}
+    \tilde p(\bz) = \frac1Z p(\bx \mid \bz)^\gamma p(\bz)\;.
+\end{equation}
+%
+where $0< \gamma < 1$ is the tempering factor.
+
+\medskip
+
+Sequential SBI techniques are generally more simulation efficient for a given observation of interest, $\bxobs$, but require a retraining of notworks for each new observation.
+
+Same initialization, but then $p_{i}(\mathbf z) = \frac1Z \mathbb{I}(\mathbf z \in \Gamma_i) p(\mathbf z)$.  Here, $\Gamma_i$ is derived from the posterior or likelihood of the preceding round.
+
+
+
+
+\subsection{Practical examples}
+
+\cw{FIGTODO Quality of posterior estimation in multiple rounds}
+
+- Learning $10^{-10}$ posterior width in multiple rounds, simple summary network
+
+- Handling of training data and network-reinitialization between rounds

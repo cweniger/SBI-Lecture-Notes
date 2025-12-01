@@ -1,0 +1,52 @@
+\section{Model Comparison in Simulation-Based Inference.}
+
+In many applications, we wish not only to assess the adequacy of a single simulator, but to compare competing models and quantify which provides a better explanation of the observed data. In the Bayesian setting, this is formalized via the \emph{Bayes factor}, often denoted \( \mathcal{K}_{01} \), and defined as
+\[
+\mathcal{K}_{01}(\bxobs) = \frac{p(\bxobs \mid \mathcal{H}_0)}{p(\bxobs \mid \mathcal{H}_1)} \,,
+\]
+where \( \mathcal{H}_0 \) and \( \mathcal{H}_1 \) are competing models, and the model evidence or marginal likelihood is given by
+\[
+p(\bx \mid \mathcal{H}_j) = \int p(\bx \mid \btheta, \mathcal{H}_j)\, p_j(\btheta)\, d\btheta \,.
+\]
+In simulation-based inference, these marginal likelihoods are typically intractable, so exact Bayes factor evaluation is not possible.
+
+A practical alternative is to learn a discriminative classifier to distinguish between samples from the models. Given simulators for \( \mathcal{H}_0 \) and \( \mathcal{H}_1 \), we train a scalar function \( f_\phi(\bx) \in \mathbb{R} \) to approximate the log-density ratio,
+\[
+f_\phi(\bx) \approx \log \frac{p(\bx \mid \mathcal{H}_1)}{p(\bx \mid \mathcal{H}_0)} = - \log \mathcal{K}_{01}(\bx) \,.
+\]
+The sign of \( f_\phi(\bx) \) indicates which model is preferred, and its magnitude reflects the strength of evidence.
+
+In practice, \( \bx \) may first be mapped through a learnable summary network \( T_\phi(\bx) \), and the classifier is applied to this representation. The effectiveness of the comparison then hinges on how well \( T_\phi(\bx) \) captures model-distinguishing features. A natural loss for training \( T_\phi \) is the \emph{binary cross-entropy} (BCE),
+\[
+\mathcal{L}_\mathrm{BCE} = \mathbb{E}_{\bx \sim p_1} \log\left(1 + e^{-f_\phi(T_\phi(\bx))} \right) + \mathbb{E}_{\bx \sim p_0} \log\left(1 + e^{f_\phi(T_\phi(\bx))} \right) \,,
+\]
+which is minimized when \( f_\phi(\bx) \) approximates the log-density ratio. This loss corresponds to the logit form of standard neural ratio estimation (NRE).
+
+\medskip
+
+It is instructive to examine the gradient signal used to update the summary representation. Assuming that \( f_\phi \) has been trained to optimality, the update to the summary network is given by
+\[
+\frac{\partial \mathcal{L}_\mathrm{BCE}}{\partial T_\phi(\bx)} = \sigma(\mp f_\phi(\bx)) \cdot \frac{\partial f_\phi(\bx)}{\partial T_\phi(\bx)} \,,
+\]
+where the sign \( \mp \) corresponds to the class label (i.e., \( \bx \sim p_1 \) or \( \bx \sim p_0 \)), and \( \sigma(f) = (1 + e^{-f})^{-1} \) is the sigmoid. As \( f_\phi(\bx) \to \pm \infty \), the sigmoid saturates and the gradient decays exponentially, leading to vanishing learning signal for the summary network \( T_\phi \). This limits the ability to further refine representations when the Bayes factor becomes large—i.e., when the models are already well-separated.
+
+\medskip
+
+To address this limitation, the \emph{POP-III loss}~\cite{popiii2023} modifies the BCE objective to maintain informative gradients even for extreme evidence ratios. It is defined as
+\[
+\mathcal{L}_\mathrm{POP\text{-}III} = \mathbb{E}_{\bx \sim p_1} \left[ \left( \log(1 + e^{-f_\phi(T_\phi(\bx))}) \right)^2 \right]
++ \mathbb{E}_{\bx \sim p_0} \left[ \left( \log(1 + e^{f_\phi(T_\phi(\bx))}) \right)^2 \right] \,.
+\]
+This loss defines the squared logit as a test statistic,
+\[
+t_\mathrm{POP\text{-}III}(\bx) = f_\phi(T_\phi(\bx))^2 \,,
+\]
+and yields the gradient
+\[
+\frac{\partial \mathcal{L}_\mathrm{POP\text{-}III}}{\partial T_\phi(\bx)} = \pm 2 f_\phi(\bx) \cdot \sigma(\mp f_\phi(\bx)) \cdot \frac{\partial f_\phi(\bx)}{\partial T_\phi(\bx)} \,.
+\]
+Here, the multiplicative factor \( f_\phi(\bx) \) ensures that the gradient does not vanish for large values of the log-density ratio, allowing the summary network to keep improving representations even in the presence of extreme Bayes factors.
+
+\medskip
+
+Classifier-based model comparison thus benefits from calibrated loss functions that preserve learning signals across the full range of evidence strengths. Losses like POP-III provide robust approximations to Bayes factors in simulation-based settings and enable effective training of summary networks without saturation.

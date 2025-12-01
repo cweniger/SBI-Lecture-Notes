@@ -1,0 +1,570 @@
+\chapter{Neural Methods for Simulation-Based Inference}
+\label{chap:methods}
+
+\begin{quotation}
+    \textit{``A complex system that works is invariably found to have evolved from a simple system that worked. A complex system designed from scratch never works and cannot be patched up to make it work. You have to start over with a working simple system.''}
+
+    \hfill --- John Gall, 1977, The Systems Bible
+    
+\end{quotation}
+
+\cw{TODO: Restructure where necessary subsection vs paragraph etc, add references}
+
+\section{Neural Networks for SBI}
+\label{sec:methods:nn}
+
+Neural networks are flexible tools for learning parametric functions from data. In the context of SBI, this typically takes the form of supervised learning: we generate synthetic observations $\bx$ from a simulator and record the corresponding parameters, $\btheta$, that produced them.  The general goal is to learn statistical functions like $p(\btheta\mid \bx )$ and $p(\bx \mid \btheta)$, or summary statistics that preserve information about this relationship.
+
+We will here just provide a very minimal crash-course to provide context.  Excellent introductions to neural networks can be found in standard references such as  \cite{nielsen_neural_2015} and
+\cite{goodfellow_deep_2016}.
+
+\subsection{Function Learning with Neural Networks}  
+\label{sec:methods:nn:mlps}
+
+\subsubsection{The Multi-Layer Perceptron}
+
+A fundamental building block of deep learning is the \emph{multi-layer perceptron} (MLP).  It is a parametric function that maps inputs $\mathbf{x} \in \mathbb{R}^{d_\text{in}}$ onto output targets $\mathbf{t} \in \mathbb{R}^{d_\text{out}}$, 
+\[
+f_\phi: \mathbb{R}^{d_\text{in}} \to \mathbb{R}^{d_\text{out}},
+\]
+realized as a feedforward neural network.  It consists of a sequence of hidden layers with intermediate representations \( \mathbf{h}_l \in \mathbb{R}^{n_l} \), defined recursively by
+\[
+\mathbf{h}_0 \equiv \mathbf{x}, \quad 
+\mathbf{h}_l = a(\mathbf{W}_l \mathbf{h}_{l-1} + \mathbf{b}_l), \quad l = 1, \dots, L{-}1, \quad 
+\mathbf{h}_L = \mathbf{W}_L \mathbf{h}_{L-1} + \mathbf{b}_L,
+\]
+with output \( \mathbf{t} \equiv \mathbf{h}_L \in \mathbb{R}^{d_\text{out}} \). The parameters \( \phi = \{\mathbf{W}_l, \mathbf{b}_l\}_{l=1}^L \) include weight matrices \( \mathbf{W}_l \in \mathbb{R}^{n_l \times n_{l-1}} \) and biases \( \mathbf{b}_l \in \mathbb{R}^{n_l} \), where \( n_0 = d_\text{in} \) and \( n_L = d_\text{out} \).
+
+The function \( a \) is a so-called \emph{activation function}---a non-linear scalar function applied element-wise to each layer’s output. The intermediate quantities \( \mathbf{t}_l \) are also referred to as the \emph{activations} of layer \( l \). The activation function enables the network to model non-linear functions. A key design feature is that it should be non-saturating (\textit{i.e.}, its derivative does not vanish for large input values) to avoid vanishing gradients. The simplest and historically most common choice is the rectified linear unit (ReLU), defined as \( a(x) = \max(0, x) \), though many other variants exist.
+With sufficient width, MLPs can approximate arbitrary continuous functions (\emph{universal approximation theorem}, for details see \cite{goodfellow_deep_2016}).
+
+
+\paragraph{Training with stochastic gradient descent}
+
+Neural networks are commonly trained by minimizing loss functions averaged over training data, which might come in the form of $(\bt_i, \bx_i)$ tuples where $i=1, \dots, N_{\rm train}$. A common choice is the squared loss, which when averaging over all $N_\text{train}$ training examples yields the loss function
+\begin{equation}
+\mathcal{L}_{\text{train}}[\boldsymbol{\phi}] = \frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} \| f_{\boldsymbol{\phi}}(\mathbf{x}_i)- \mathbf{t}_i \|^2\;,
+\label{eqn:MSE_loss}
+\end{equation}
+where $f_{\boldsymbol{\phi}}$ is a neural network parametrized by weights and biases collectively denoted $\boldsymbol{\phi}$.
+Training is typically performed using stochastic gradient descent (SGD), which updates the parameters based on a small randomly sampled subset (mini-batch) of the training data. Instead of computing gradients over the full training set, SGD approximates $\mathcal{L}_{\text{train}}[\boldsymbol{\phi}]$ using a mini-batch of size $B$:
+\[
+\mathcal{L}_{\text{batch}}[\boldsymbol{\phi}] = \frac{1}{B} \sum_{i \in \mathcal{B}} \| f_{\boldsymbol{\phi}}(\mathbf{x}_i)- \mathbf{t}_i \|^2,
+\]
+where $\mathcal{B}$ is a randomly sampled subset of $B$ training examples. The parameter update rule is:
+\[
+\boldsymbol{\phi}_{k+1} = \boldsymbol{\phi}_k - \eta_k \nabla_{\boldsymbol{\phi}} \, \mathcal{L}_{\text{batch}}[\boldsymbol{\phi}],
+\]
+where $\eta_k$ is the learning rate.  To prevent overfitting, the final parameter version is selected based on its performance on a separate validation set of size $N_{\text{val}}$. This procedure, known as \emph{early stopping}, selects the model that generalizes best to unseen data (again see \cite{goodfellow_deep_2016} for details).
+
+
+\subsubsection{What Networks Learn}
+
+Minimizing the squared loss function evidently leads to a network that approximates the relationship $f_\phi(\mathbf{x}) \approx \mathbf{t}$. However, different loss functions make different assumptions and focus on specific aspects of this relationship. To understand what the network learns in the limit of infinite data, let us assume that training and validation data are drawn from some underlying statistical model $\mathbf{x}, \mathbf{t} \sim p(\mathbf{x}, \mathbf{t})$.
+
+In the limit $N_{\text{train}} \to \infty$, the empirical training loss converges to the expected loss:
+\begin{equation}
+\mathcal{L}_{\infty}[f] = \int p(\mathbf{x}, \mathbf{t}) \, \| f(\mathbf{x}) - \mathbf{t} \|^2 \, d\mathbf{x} \, d\mathbf{t}.
+\end{equation}
+
+Our task is to find the function $f^*$ that minimizes this expected loss. Assuming the network has infinite capacity and flexibility, we can use functional calculus. Taking the functional derivative with respect to $f$ and setting it to zero:
+\begin{align}
+\frac{\delta \mathcal{L}_{\infty}}{\delta f} &= \int p(\mathbf{x}, \mathbf{t}) \, 2(f(\mathbf{x}) - \mathbf{t}) \, d\mathbf{t} = 0 \\
+&= 2 p(\mathbf{x}) \left[ f(\mathbf{x}) \int p(\mathbf{t} \mid \mathbf{x}) \, d\mathbf{t} - \int \mathbf{t} \, p(\mathbf{t} \mid \mathbf{x}) \, d\mathbf{t} \right] = 0,
+\end{align}
+where we used $p(\mathbf{x}, \mathbf{t}) = p(\mathbf{x}) p(\mathbf{t} \mid \mathbf{x})$. Since $\int p(\mathbf{t} \mid \mathbf{x}) \, d\mathbf{t} = 1$, this yields:
+\[
+f^*(\mathbf{x}) = \int \mathbf{t} \, p(\mathbf{t} \mid \mathbf{x}) \, d\mathbf{t} = \mathbb{E}_{p(\mathbf{t} \mid \mathbf{x})}[\mathbf{t}].
+\]
+That is, minimizing mean squared error leads to a predictor that returns the mean value of the target variable $\mathbf{t}$, conditioned on the input $\mathbf{x}$.  
+
+
+\paragraph{From point to density estimation} 
+
+A standard MLP with squared loss function acts as a point estimator, learning only the conditional mean $\mathbb{E}[{\bt} \mid {\bx}]$~\citep[\fex][]{bishop_pattern_2006}. But what if we want to learn the full conditional distribution $p(\bt \mid \bx)$, not just its mean?
+
+\medskip
+
+As a first step toward density estimation, consider modeling the posterior as a 1-dim Gaussian: $q_\phi(t \mid \bx) = \mathcal{N}(t; 
+\mu = f_\phi(\bx), \sigma^2 = g_\phi(\bx))$ where the network outputs both mean and variance. Maximizing the likelihood of this model yields the loss function
+\begin{equation}
+\mathcal{L}_{\text{train}}[\boldsymbol{\phi}] = \frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} 
+\left[\frac{( f_{\boldsymbol{\phi}}(\mathbf{x}_i)- t_i )^2}{g_\phi(\bx_i)}
++\log g_\phi(\bx_i)\right]\;.
+\label{eqn:MSE_loss_second}
+\end{equation}
+Like above, one can use functional derivative calculus to show that in the limit of infinite training data and network capacity, the loss ensures that the network learns both the mean and the variance of the posterior distribution,
+$$
+f^*(\bx) = \mathbb{E}[t \mid \bx]
+\quad \text{and}\quad 
+g^*(\bx) = \text{Var}[t \mid \bx]\;.
+$$
+This constitutes our first example of neural density estimation, albeit limited to Gaussian distributions. The approach of using neural networks to output both mean and variance for uncertainty quantification dates back to at least \cite{nix_estimating_1994}, and has become a fundamental technique in probabilistic deep learning. In our context, the scalar networks $f_\phi(\bx)$ and $g_\phi(\bx)$ learn the two statistics needed to parametrize a Gaussian posterior distribution---effectively training data summaries that provide information about the parameter and its uncertainty.
+
+\medskip
+
+In general, loss functions \emph{define} the statistical quantities that networks learn to approximate. Through different loss functions and architectural choices, neural networks can capture increasingly rich statistical structures, from simple point estimates to full multimodal distributions $p({\bt} \mid {\bx})$, as we will explore in subsequent sections.
+
+
+\subsubsection{From Theory to Practice} 
+
+Training neural networks remains more akin to hands-on bench work than idealized engineering. Like crafting a delicate clockwork, successful training requires balancing competing considerations: adaptive learning rates, regularization, and architectural choices that encode appropriate inductive biases. These skills develop through practice and accumulated experience. We highlight here some relevant aspects that underlie this craft.
+
+\begin{description}
+   \item \textbf{Optimization beyond SGD.} While SGD is conceptually simple, it is often replaced or enhanced by adaptive optimizers such as \emph{Adam}~\citep{kingma_adam_2017}, which adjust each parameter's update based on running estimates of the gradient's mean and variance. Beyond this, learning rate scheduling is critical for stabilizing results and achieving convergence~\citep[see][]{goodfellow_deep_2016}.
+
+   \item \textbf{Initialization and normalization.} Proper weight initialization and input/output normalization are crucial for efficient network training, as they strongly affect gradient propagation and convergence behavior. A typical design goal is that each layer approximately maps standard normally distributed inputs to outputs with similar statistics. Common initialization schemes (Xavier, Kaiming) are standard in most deep learning frameworks~\citep{goodfellow_deep_2016}. In deeper architectures, batch normalization~\citep{ioffe_batch_2015} and skip connections further stabilize activations and gradients. As a corollary, input features and target variables should be normalized to zero mean and unit variance.
+   
+   \item \textbf{Inductive bias and architecture.} An \emph{inductive bias} refers to structural assumptions built into the network architecture that favor certain types of solutions~\citep{goodfellow_deep_2016}. MLPs have minimal inductive bias—they are flexible non-linear function approximators capable of representing virtually any sufficiently smooth function. Many advanced architectures (convolutional, graph-based) can be viewed as structured MLP variants that incorporate constraints suited to specific data modalities, often including operations beyond linear transformations such as pooling, softmax, or quadratic interactions.
+   
+   \item \textbf{Overparameterization and implicit regularization.} Modern neural networks typically possess far more parameters than needed to fit the training data. While naive expectation suggests a vast landscape of local minima, SGD remarkably tends to select low-complexity functions that generalize well—a phenomenon attributed to implicit regularization~\cite[\fex][]{mehta_high-bias_2019}. Recent work on mode connectivity reveals that many minima lie on connected manifolds in parameter space, forming continuous paths of near-constant loss~\citep[\fex][]{garipov_loss_2018}.
+\end{description}
+
+
+\subsection{Neural Networks for Modeling Statistical Relations}
+\label{sec:methods:nn:relations}
+
+The general architecture of networks and training in simulation-based inference is shown in Fig.~\ref{fig:sbi_overview}.  Simulated data is fed through a learnable \emph{summary extract network}, $T_\phi(\bx)$, whose output is combined with the model parameters $\btheta$ in a trainable \emph{inference head}.  Depending on the \emph{inference loss} function, the neural networks of the inference head learn to approximate different statistical relations, such as the parameter posterior or the score. 
+
+
+\begin{figure}[ht]
+\centering
+    \includegraphics[width=0.85\linewidth]{figures/fig3.drawio.pdf}
+    \caption{Basic architecture for simulation-based inference. \textit{Green box:} Simulation of parameters $\btheta \sim p(\btheta)$ and corresponding observations $\mathbf{x} \sim p(\mathbf{x} \mid \btheta)$. \textit{Yellow box:} An (optional) summary extractor $T_\phi(\mathbf{x})$ to compresses high-dimensional data into informative features. \textit{Red box:} The inference head approximates the target statistical relationship. \textit{Gray box:} The inference loss $\mathcal{L}$ defines what statistical quantity is learned. \textit{Right panels:} Example outputs.}
+    \label{fig:sbi_overview}
+\end{figure}
+
+Table~\ref{tab:sbi_method_comparison} provides an overview of the main approaches we will explore in detail throughout this section. Looking at Bayes' theorem from Eq.~\eqref{eqn:Bayes_theorem},  we see multiple entry points for neural network approximation. Different SBI method target different components and aspects of this fundamental statistical relationship:
+
+\begin{itemize}
+   \item \textbf{Direct posterior estimation (NPE):} Learn $q_\phi(\btheta \mid \bx) \approx p(\btheta \mid \bx)$ directly, bypassing the need to model individual components.  This enables end-to-end (E2E) learning of information maximizing feature extraction networks, fast sampling and explicit evaluation of approximate posterior densities. See Sec.~\ref{sec:methods:density}.
+   
+   \item \textbf{Likelihood estimation (NLE):} Learn $q_\phi(\bx \mid \btheta) \approx p(\bx \mid \btheta)$, then apply Bayes' rule with the known prior to obtain the posterior.  This enables, fast sampling of approximate simulated data and explicit likelihood evaluation. Posterior sampling has to be done with, \fex, MCMC, and E2E learning of feature extractors is not possible. See Sec.~\ref{sec:methods:density}.
+   
+   \item \textbf{Ratio estimation (NRE):} Learn the likelihood-to-evidence ratio $r_\phi(\btheta, \bx) \approx p(\bx \mid \btheta)/p(\bx)$, which equals the posterior-to-prior ratio. It enables E2E learning of feature extractors, but requires posterior sampling via MCMC.  See Sec.~\ref{sec:methods:ratio}.
+   
+   \item \textbf{Score-based methods (SSM):} Learn quantities related to the score function $\nabla_{\btheta} \log p(\btheta \mid \bx)$, which defines the posterior up to normalization. It enables E2E learning of feature extractors, and sampling via Langevin dynamics-related methods. See Sec.~\ref{sec:core_score}
+   
+\end{itemize}
+
+Each approach makes different trade-offs between computational efficiency, architectural requirements, and the type of access they provide to the posterior, as listed in Tab.~\ref{tab:sbi_method_comparison}.
+The following subsections explore each approach in detail.
+
+
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}p{1.4cm}p{3.0cm}p{3.3cm}p{1.8cm}p{3.2cm}@{}}
+\toprule
+\textbf{Method} &
+\textbf{Training target} &
+\textbf{Posterior access} &
+\textbf{E2E summary} &
+\textbf{Loss function} \\
+\midrule
+\textbf{NPE} &
+$q_\phi(\theta \mid x)$ &
+Direct (explicit posterior) &
+\faCheck\ Yes &
+Negative log-likelihood: $-\log q_\phi(\theta \mid x)$ \\
+\textbf{NLE} &
+$q_\phi(x \mid \theta)$ &
+Via Bayes' rule: use prior and normalizer &
+\faTimes\ No or pretrained &
+Negative log-likelihood: $-\log q_\phi(x \mid \theta)$ \\
+\textbf{NRE} &
+$r_\phi(\theta, x) \approx \frac{p(x \mid \theta)}{p(x)}$ &
+Via rejection sampling or importance weighting &
+\faCheck\ Yes&
+Binary cross-entropy (classification loss) \\
+\textbf{SSM} &
+Score $\nabla_x \log p(x)$ &
+Indirect; posterior via integration or Langevin sampling &
+\faCheck\ Yes&
+Score-matching loss or denoising loss \\
+\textbf{ABC} &
+None (sample filtering) &
+Via accepted samples only (implicit) &
+\faTimes\ No or pretrained&
+Accept/reject threshold on $d(T(x), T(x_0))$ \\
+\bottomrule
+\end{tabular}
+\caption{Comparison of key simulation-based inference methods in terms of what they learn, how they access the posterior, whether they support end-to-end summary learning, and what loss function they use.}
+\label{tab:sbi_method_comparison}
+\end{table}
+
+
+
+\section{Density Estimation}
+\label{sec:methods:density}
+
+
+\subsection{Neural Posterior Estimation}
+\label{sec:methods:density:npe}
+
+
+\begin{algorithm}[t]
+\begin{algorithmic}[1]
+\State \textbf{Input:}
+\State \hspace{\algorithmicindent} Implicit prior distribution $p(\btheta)$
+\State \hspace{\algorithmicindent} Implicit likelihood model $p(\bx \mid \btheta)$
+\State \hspace{\algorithmicindent} Neural density estimator $q_\phi(\btheta \mid \bx)$
+\State \hspace{\algorithmicindent} Number of simulations $N$
+\State \textbf{Output:} Learned posterior $q_\phi(\btheta \mid \bx)$
+\State
+\State Initialize training dataset $\mathcal{D} \gets \emptyset$
+\For{$i = 1$ to $N$}
+    \State Sample $\btheta^{(i)} \sim p(\btheta)$
+    \State Simulate $\bx^{(i)} \sim p(\bx \mid \btheta^{(i)})$
+    \State Add the pair $(\bx^{(i)}, \btheta^{(i)})$ to the training dataset $\mathcal{D}$
+\EndFor
+\State Initialize neural network $q_\phi(\btheta \mid \bx)$ with parameters $\phi$
+\While{not converged}
+    \State Sample a mini-batch $\mathcal{B} \subset \mathcal{D}$
+    \State Compute the loss:
+    \State \hspace{\algorithmicindent} 
+    $\mathcal{L}_\text{NPE}[\phi, \mathcal{B}] = -\frac{1}{|\mathcal{B}|} \sum_{(\bx, \btheta) \in \mathcal{B}} \log q_{\phi}(\btheta \mid \bx)$
+    \State Update parameters $\phi$ via gradient descent on $\mathcal{L}_\text{NPE}$
+\EndWhile
+\State \textbf{Return} Trained network $q_\phi(\btheta \mid \bx)$
+\end{algorithmic}
+\caption{Neural Posterior Estimation (NPE). The algorithm trains a conditional density estimator $q_\phi(\btheta \mid \bx) \approx p(\btheta \mid \bx)$, amortized over $\bx \sim p(\bx)$. 
+Neural Likelihood Estimation (NLE) is realised by replacing $q_\phi(\btheta \mid \bx)$ with $q_\phi(\bx \mid \btheta)$.
+Validation tests are not made explicit for breivty. 
+}
+\label{alg:NPE}
+\end{algorithm}
+
+Neural Posterior Estimation (NPE) is one of the most widely used approaches for amortized simulation-based inference. Its objective is to approximate the intractable posterior distribution $p(\btheta \mid \bx)$ with a flexible conditional density estimator $q_\phi(\btheta \mid \bx) \approx p(\btheta \mid \bx)$. The algorithm is simple to implement and interpret, but requires specialized network architectures---such as the normalising flow models that we will discuss in Sec.~\ref{sec:methods:density:flows}---that represent probability densities throughout training.
+
+The foundations of this approach can be traced to early work on conditional neural density estimation in the context of Sequential Monte Carlo and explicit graphical models~\cite{gu_neural_2015, paige_inference_2016, Le2016InferenceCompilationUniversal}, building on even earlier ideas for neural network-based uncertainty quantification~\citep{nix_estimating_1994}. A key breakthrough was the recognition that these techniques could be used to perform Bayesian posterior estimation for \emph{implicit} likelihood models---simulators where the likelihood cannot be evaluated directly---both in sequential~\cite{Papamakarios2016FastFreeInference} and fully amortized~\cite{Ambrogioni2018ForwardAmortizedInference} settings.
+
+
+
+
+\paragraph{Training objective.}
+
+As in Approximate Bayesian Computation (ABC), training data in NPE consist of independent samples from the joint generative model \( p(\bx, \btheta) = p(\bx \mid \btheta) p(\btheta) \). These samples are obtained by first drawing \( \btheta \sim p(\btheta) \), and then simulating \( \bx \sim p(\bx \mid \btheta) \). Generating \( N \) samples in this way yields a training dataset
+\[
+\mathcal{D} = \{(\boldsymbol{\theta}_i, \mathbf{x}_i)\}_{i=1}^N\,, \quad
+(\btheta_i, \bx_i) \iidsim p(\bx, \btheta)\;.
+\]
+In practice, the dataset \( \mathcal{D} \) is typically split into training and validation sets as described in Sec.~\ref{sec:methods:nn:mlps}.
+
+The training objective is to maximize the probability of the parameters \( \btheta \) under the conditional model \( q_\phi(\btheta \mid \bx) \), evaluated on the training data. This leads to the following loss function:
+\begin{equation}
+\mathcal{L}_\text{NPE} = - \frac{1}{|\mathcal{D}|}
+\sum_{(\btheta, \bx) \in \mathcal{D}} \log q_\phi(\btheta \mid \bx)\;.
+\label{eqn:NPE_loss}
+\end{equation}
+In the limit of infinite training data \( N \to \infty \), the empirical loss converges to an expectation over the joint data distribution:
+\begin{equation}
+\mathcal{L}_\text{NPE} \underset{N \to \infty}{\longrightarrow}
+\mathbb{E}_{\bx \sim p(\bx)}
+\left\Big[
+D_{\text{KL}}(p(\btheta \mid \bx) \, \| \, q_\phi(\btheta \mid \bx))
++
+\mathcal{H}(p(\btheta \mid \bx))
+\right\Big].
+\label{eqn:NPE_limit}
+\end{equation}
+Since the KL divergence is non-negative and vanishes only when \( q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx) \), it is evident that the loss is minimized precisely when the learned posterior matches the true posterior for all \( \bx \). In practice, how closely this goal is achieved depends on the network architecture, optimization method, data representation, and training strategy. The full training procedure is summarized in Alg.~\ref{alg:NPE}.
+
+As noted above, the use of NPE requires density estimators that produce normalized, non-negative outputs for all input values. Normalizing flows are a common choice, as discussed in Sec.~\ref{sec:methods:density:flows}, since they allow for tractable density evaluation and efficient sampling.
+
+\paragraph{Learning information-maximizing summaries.}
+
+A key strength of NPE is that it enables the joint learning of data summaries and posterior estimation. In practice, many architectures used for NPE include a summary network \( T_\phi(\bx) \), which maps high-dimensional observations to a lower-dimensional representation. The density estimator then operates on this compressed form: \( q_\phi(\btheta \mid \bx) \to q_\phi(\btheta \mid T_\phi(\bx)) \).
+
+In this setup, Eq.~\eqref{eqn:NPE_limit} implies\footnote{This follows from the non-negativity of the KL divergence. The reasoning is analogous to the derivation of the Evidence Lower Bound (ELBO) in variational inference.} that minimizing the NPE loss also minimizes an upper bound on the expected posterior entropy conditioned on the summary:
+\[
+\mathcal{L}_{\text{NPE}} 
+\;\geq\;
+\mathbb{E}_{p(\bx)}
+\mathcal{H}(p(\btheta \mid T_\phi(\bx)))
+\;\geq\;
+\mathbb{E}_{p(\bx)}
+\mathcal{H}(p(\btheta \mid \bx))\;.
+\]
+The bound becomes tight when the conditional estimator is exact, \( q_\phi(\btheta \mid T_\phi(\bx)) = p(\btheta \mid T_\phi(\bx)) \). Therefore, optimizing the summary network \( T_\phi(\bx) \) end-to-end encourages summaries that minimize posterior uncertainty.
+
+Using the identity
+\begin{equation}
+\mathbb{E}_{p(\bx)}
+\mathcal{H}(p(\btheta \mid T_\phi(\bx)))
+= \mathcal{H}(p(\btheta)) - \mathcal{I}(\btheta; T_\phi(\bx))\;,
+\label{eqn:NPE_MI}
+\end{equation}
+it follows that minimizing posterior entropy is equivalent to maximizing the mutual information between \( \btheta \) and the summary \( T_\phi(\bx) \). In this sense, the learned summaries are \emph{information-maximizing}.
+
+This property is one of the main practical advantages of NPE, but also a potential limitation: if no efficient summary representation exists for the problem, posterior accuracy may be fundamentally limited.
+
+
+\paragraph{The amortization trade-off: generality vs efficiency.}
+
+As seen in Eq.~\eqref{eqn:NPE_limit}, the loss function used in neural posterior estimation (NPE) involves an average over simulated observations, \( \bx \sim p(\bx) \). As a consequence, the trained posterior estimator \( q_\phi(\btheta \mid \bx) \) is amortized over the full support of the data distribution. That is, it learns to approximate \( p(\btheta \mid \bx) \) for any \( \bx \in \Omega \), rather than being tailored to a single observation. This amortization can be powerful: it enables \emph{fast inference at test time for arbitrary future observations}. However, in many scientific applications one is interested in the analysis of a single specific observation \( \bxobs \), and full amortization may be \emph{unnecessarily expensive}.
+
+\cw{TODO: Add example for enforced amortization as virtue}
+
+\smallskip
+
+To see this more concretely, consider the ideal—but intractable—objective of directly minimizing the negative log-likelihood over the posterior of interest:
+\[
+\mathcal{L}[q_\phi] = \mathbb{E}_{\btheta \sim p(\btheta \mid \bxobs)} \left[ -\log q_\phi(\btheta) \right].
+\]
+This objective would lead to a non-amortized density estimator for \( p(\btheta \mid \bxobs) \). However, it is not practical, since it requires access to posterior samples, i.e., to the solution of the very inference problem we wish to solve. The strategy in NPE and related methods is to replace this intractable loss with a tractable, amortized variant:
+\[
+\mathcal{L}[q_\phi] = \mathbb{E}_{\bx \sim p(\bx)} \, \mathbb{E}_{\btheta \sim p(\btheta \mid \bx)} \left[ -\log q_\phi(\btheta \mid \bx) \right].
+\]
+This formulation removes the need for posterior samples and instead leverages simulator access to sample from the joint distribution \( p(\bx, \btheta) = p(\bx \mid \btheta)\,p(\btheta) \). In doing so, we eliminate the original sampling bottleneck—\emph{but at the cost of training a powerful conditional density estimator} that must generalize across the full support of \( p(\bx) \). \emph{The difficulty of the original inference problem is not avoided, but transferred: from sampling to learning a conditional flow.}
+
+\medskip
+
+This enforced amortization is a defining feature of simulation-based inference (SBI), and contrasts with most likelihood-based inference (LBI) approaches, where amortization is usually absent or optional (e.g., in variational autoencoders).
+
+Whether this amortization is \emph{a virtue or a limitation} depends on the use case. In applications requiring fast inference for many observations, amortization is essential. But \emph{in situations where only a single observation is relevant, this generality may lead to disproportionate computational demands} in terms of both simulation effort and model capacity. Sequential methods to alleviate this issue will be discussed in Sec.~\ref{sec:sequential_sbi}.
+
+
+\subsection{Modeling Probability Density Functions with Normalizing Flows}
+\label{sec:methods:density:flows}
+
+The success of NPE depends critically on the choice of neural architecture for the conditional density estimator $q_\phi(\btheta \mid \bx)$. As we will see, this is not a trivial modeling challenge.
+
+Neural networks that directly model probability density functions must satisfy strict constraints: their outputs must be non-negative, and the density distribution must integrate to one,
+%
+\begin{equation}
+q_\phi(\btheta \mid \bx ) \geq 0\,, \quad \text{and} \quad
+\int d\btheta\, q_\phi(\btheta \mid \bx) = 1 \quad
+\forall \quad \bx \in \mathcal{X}\;.
+\label{eqn:normalization}
+\end{equation}
+%
+Ideally, they should also support efficient sampling from the learned distribution.
+
+\medskip
+
+\emph{Normalizing flows} satify the above criteria, and can approximate complex, multimodal distributions while maintaining exact probability density evaluation and efficient sampling  \citep[for a recent review see][]{papamakarios_normalizing_2021}. A normalizing flow transforms a simple base distribution \( p_Z(\mathbf{z}) \)—typically a standard Gaussian in \( \mathbb{R}^d \)—into a complex target distribution \( p(\btheta \mid \bx) \) by applying a sequence of invertible and differentiable mappings. Each transformation is of the form \( \mathbf{z}_l = f_{\phi, \bx}^{(l)}(\mathbf{z}_{l-1}) \), and parametrised through network parameters $\phi$.  In the context of SBI, it takes as input besides the transformation variable $\bz_{l-1}$ also the data $\bx$ that we condition on. 
+
+The full flow is defined as a sequence of applications of the transformation functions onto a sample from the base distribution,
+\[
+\btheta = f_{\phi, \bx}^{(L)} \circ \cdots \circ f_{\phi, \bx}^{(1)}(\mathbf{z}_0), \quad \mathbf{z}_0 \sim p_Z(\bz)\;.
+\]
+%
+Using the change-of-variables formula, the model density \( q_\phi(\btheta \mid \bx) \) can be computed as
+\[
+q_\phi(\btheta \mid \bx) = p_Z(\mathbf{z}_0) \prod_{l=1}^{L} \left| \det \left( \frac{\partial f^{(l)}_{\phi, \bx}}{\partial \mathbf{z}_{l-1}} \right)^{-1} \right|.
+\]
+This formula enables exact likelihood evaluation, provided that each transformation \( f_l \) is both invertible and has a Jacobian determinant that is efficient to compute.
+Typical choices for the component functions \( f_l \) include \emph{affine coupling layers}, which update only a subset of variables conditioned on the others to yield triangular Jacobians, and \emph{autoregressive transforms}, which model each output dimension sequentially as a function of previous ones. These design choices ensure computational efficiency in both forward and inverse passes, as well as tractability of the log-determinant.
+
+On advantage of flow-based models is that sampling is straightforward and highly efficient: one simply draws \( \mathbf{z}_0 \sim p_Z \) and computes \( \mathbf{x} = f(\mathbf{z}_0) \) by pushing the sample forward through the flow. Conversely, to evaluate the likelihood density \( p_X(\mathbf{x}) \), one must compute the inverse transformation \( \mathbf{z}_0 = f^{-1}(\mathbf{x}) \), which requires that each \( f_l \) be easily invertible in practice.
+
+\medskip
+
+For particularly complex posterior geometries, discrete flows may require many layers to achieve adequate flexibility. This motivates considering the continuous limit of the transformation process.
+In \emph{continuous normalizing flows} (CNFs), the transformation is modeled as the continuous evolution of a latent variable $\mathbf{z}(t) \in \mathbb{R}^d$ under a learned vector field. Starting from $\mathbf{z}(0) \sim p_Z$, the transformed variable $\btheta \equiv \mathbf{z}(T)$ is obtained by solving the ordinary differential equation (ODE)
+\[
+\frac{d}{dt}\mathbf{z}(\mathbf{x}, t) = \mathbf{u}_{\phi, \mathbf{x}}^{(t)}(\mathbf{z}(t)), \quad \text{with} \quad \mathbf{z}(0) \sim p_Z.
+\]
+The log-density evolves according to the continuity equation:
+\[
+\frac{d}{dt} \log q_\phi^{(t)}(\mathbf{z}(t) \mid \mathbf{x}) = -\nabla_{\mathbf{z}} \cdot \mathbf{u}_{\phi,\mathbf{x}}^{(t)}(\mathbf{z}(t))\;.
+\]
+Evaluation of CNFs, $q_\phi(\btheta \mid \bx) \equiv q_\phi^{(T)}(\btheta \mid \bx)$ requires solution of both ODEs.  The vector field $\mathbf{u}_{\phi, \bx}^{(t)}(\btheta(t))$ can be then trained through the regular NPE loss, Eq.~\eqref{eqn:NPE_loss}.
+
+
+\subsection{Neural Likelihood Estimation}
+\label{sec:methods:density:nle}
+
+Neural likelihood estimation (NLE) aims to approximate the data likelihood \( p(\bx \mid \btheta) \) using a conditional density estimator \( q_\phi(\bx \mid \btheta) \approx p(\bx \mid \btheta) \)~\citep{Papamakarios2018SequentialNeuralLikelihood, Alsing2018MassiveOptimalData}.
+Unlike NPE, this approach does not depend on the prior \( p(\btheta) \), making it attractive in settings where the prior is either unknown, subject to change, or when the goal is frequentist rather than Bayesian inference. Applications include hypothesis testing, model comparison via likelihood ratios, or posterior inference via likelihood-based techniques.
+
+As in NPE, training data consist of samples from the joint distribution \( p(\btheta, \bx) = p(\btheta)\, p(\bx \mid \btheta) \), obtained by sampling parameters \( \btheta \sim p(\btheta) \) and simulating observations \( \bx \sim p(\bx \mid \btheta) \). The density estimator \( q_\phi(\bx \mid \btheta) \) is then trained by maximizing the likelihood of the observations under the model. This corresponds to minimizing the negative log-likelihood loss:
+\[
+\mathcal{L}_\text{NLE} = - \frac{1}{|\mathcal{D}|} \sum_{(\btheta, \bx) \in \mathcal{D}} \log q_\phi(\bx \mid \btheta).
+\]
+
+In the limit of infinite training data, the empirical loss converges to the expected KL divergence between the true and approximate likelihoods, plus the entropy of the data:
+\begin{equation}
+\mathcal{L}_\text{NLE} \underset{N\to\infty}{\longrightarrow}
+\mathbb{E}_{p(\btheta)} \left[
+D_{\text{KL}}(p(\bx \mid \btheta) \,\|\, q_\phi(\bx \mid \btheta)) +
+\mathcal{H}(p(\bx \mid \btheta))
+\right].
+\label{eqn:NLE_limit}
+\end{equation}
+As in the case of NPE, the loss is minimized when \( q_\phi(\bx \mid \btheta) = p(\bx \mid \btheta) \) for all \( \btheta \).
+
+After training, the learned likelihood model can be used in different ways. In the Bayesian context, one can generate posterior samples via Markov Chain Monte Carlo (MCMC), using Bayes’ theorem with the learned likelihood:
+\[
+\btheta \overset{\text{MCMC}}{\sim} \frac{1}{Z(\bx)} \, q_\phi(\bx \mid \btheta) \, p(\btheta).
+\]
+Alternatively, the likelihood itself can be used for frequentist-style inference, such as likelihood ratio tests or goodness-of-fit evaluations.
+
+Like NPE, NLE requires density estimators that produce normalized, non-negative outputs. Normalizing flows are commonly used for this purpose. However, a key difference is that NLE does not support end-to-end learning of data summaries. Since the model directly approximates the full data distribution, replacing \( \bx \) with a learnable summary \( T_\phi(\bx) \) would allow the network to collapse the representation to a constant value—artificially minimizing the entropy term in the loss. As a result, any dimensionality reduction or summary construction must be performed separately in advance.
+
+Finally, NLE can be a valuable complement to NPE. For example, it enables posterior predictive checks or cross-validation of the posterior obtained via NPE by comparing it against samples drawn from the learned likelihood via MCMC.
+
+
+
+\section{Density Ratio Estimation}
+\label{sec:methods:ratio}
+
+\begin{algorithm}[t]
+\caption{Neural Ratio Estimation (NRE). The algorithm trains a network to approximate the log ratio, $f_\phi(\bx; \btheta) \approx \log r(\bx; \btheta)$, amortized over data $\bx \sim p(\bx)$.
+}\label{alg:NRE}
+\begin{algorithmic}[1]
+\State \textbf{Input:}
+%\State \hspace{\algorithmicindent} Observed data $\mathbf{D}_{obs}$
+\State \hspace{\algorithmicindent} Prior distribution $\p(\btheta)$
+\State \hspace{\algorithmicindent} Likelihood model $p(\bx \mid \btheta)$
+\State \hspace{\algorithmicindent} Neural network architecture, $f_\phi(\bx; \btheta)$
+\State \hspace{\algorithmicindent} Number of simulations $N$
+\State \textbf{Output:} Approximate likelihood-to-evidence ratio, $f_\phi(\bx; \btheta) \approx \log r(\bx; \btheta)$
+\State
+\State Initialize training dataset $\mathcal{D} \gets \emptyset$
+\For{$i = 1$ to $N$}
+    \State Sample $\btheta^{(i)}$ from the prior $p(\btheta)$
+    \State Generate synthetic data $\bx^{(i)}$ from the model $p(\bx \mid \btheta)$
+    \State Add the pair $(\bx^{(i)}, \btheta^{(i)})$ to the training dataset $\mathcal{D}$
+\EndFor
+\State Initialize neural network $f_\phi(\bx; \btheta)$ with parameters $\phi$
+\While{not converged}
+    \State Sample a mini-batch $\mathcal{B}$ from $\mathcal{D}$
+    \State Sample a mini-batch $\mathcal{B}_c$ from $\mathcal{D}_c$ \Comment $\mathcal{B}_c$ can be obtained by scrambling $\mathcal{B}$
+%    \For{each $(\bx, \btheta)$ in $\mathcal{B}$}
+%        \State Compute $f_\phi(\bx; \btheta)$
+%        \State Compute $f_\phi(\bx; \btheta)$
+        \State Compute the binary classification loss:
+        \State \hspace{\algorithmicindent} $\mathcal{L}_\text{NLE}
+        %(\phi, \mathcal{B}, \mathcal{B}_c) 
+        = 
+- \frac1{|\mathcal{B}|}\sum_{\btheta, \bx \in \mathcal{B}} \log \sigma \left(f_\phi(\bx; \btheta) \right) 
+- 
+\frac1{|\mathcal{B}_c|}\sum_{\btheta, \bx \in \mathcal{B}_c} \log \sigma \left(-f_\phi(\bx; \btheta) \right)$
+    \State Update $\phi$ using gradient descent on accumulated loss $\mathcal{L}_\text{NLE}(\phi, \mathcal{B}, \mathcal{B}_c)$
+\EndWhile
+
+\State \textbf{Return} Trained neural network $f_\phi(\bx; \btheta)$, representing $\log r(\bx; \btheta)$
+\end{algorithmic}
+\end{algorithm}
+
+Neural ratio estimation (NRE) is a class of simulation-based inference techniques that, instead of learning full densities, focuses on estimating \emph{density ratios}. Such ratios naturally arise in classification tasks, where the optimal Bayesian classifier is determined by the ratio of class-conditional densities. Density ratios are also of interest in their own right---for instance, in likelihood ratio tests in a frequentist setting, or for obtaining indirect information about unknown densities by comparing them to known ones.
+
+The approach of estimating density ratios for Bayesian inference predates the use of neural networks~\cite{izbicki_high-dimensional_2014, dinev_dynamic_2018, thomas_likelihood-free_2020}. Early neural implementations focused on likelihood ratios for frequentist inference, estimating $p(\mathbf{x} \mid \boldsymbol{\theta})/p(\mathbf{x} \mid \boldsymbol{\theta}')$~\cite{Cranmer2015ApproximatingLikelihoodRatios}. However, recent work has shifted toward estimating likelihood-to-evidence ratios, which has been found to be numerically more stable because the contrasted distributions have overlapping support by definition~\cite{Hermans2019LikelihoodfreeMCMCAmortized, rhodes_telescoping_2020}.
+
+
+\subsection{Neural Ratio Estimation}
+\label{sec:methods:ratios:nre}
+
+One of the most common and practically useful targets in this context is the \emph{likelihood-to-evidence ratio}. It is defined as the ratio between the joint distribution \( p(\bx, \btheta) = p(\bx \mid \btheta) p(\btheta) \) and the product of marginals \( p(\bx)p(\btheta) \):
+\begin{equation}
+r(\bx; \btheta) \equiv 
+\frac{p(\bx, \btheta)}{p(\bx)p(\btheta)}
+= \frac{p(\bx \mid \btheta)}{p(\bx)}
+= \frac{p(\btheta \mid \bx)}{p(\btheta)}\;.
+\label{eqn:lte-ratio}
+\end{equation}
+This ratio reveals deep connections between posterior inference, marginal likelihoods, and joint densities. In particular, when the prior \( p(\btheta) \) is known, access to the ratio \( r(\bx; \btheta) \) directly enables recovery of the posterior via Bayes' theorem.
+
+\paragraph{Training objective.}
+
+To estimate \( r(\bx; \btheta) \), one constructs a binary classification problem distinguishing between samples from the joint distribution and the product of marginals. The two datasets are defined as
+\[
+\mathcal{D} = \{(\btheta_i, \bx_i)\}_{i=1}^N\,, \quad (\btheta, \bx) \sim p(\bx, \btheta)\,,
+\]
+and
+\[
+\mathcal{D}_c = \{(\btheta_i, \bx_i)\}_{i=1}^N\,, \quad (\btheta, \bx) \sim p(\btheta) p(\bx)\,.
+\]
+Samples from the product distribution can be constructed by drawing two independent prior samples \( \btheta, \btheta' \sim p(\btheta) \), simulating \( \bx \sim p(\bx \mid \btheta') \), and then discarding \( \btheta' \). In practice, a common shortcut is to generate \( \mathcal{D}_c \) by shuffling parameter–data pairs from \( \mathcal{D} \), creating mismatched pairs \( (\btheta_i, \bx_j) \) with \( i \neq j \).
+
+A standard loss for this classification task is the binary cross-entropy (BCE) loss.\footnote{
+Training is most commonly based on minimising the binary cross-entropy loss. However, multiple statistically equivalent options exist, that can be numerically better behaved in some cases \citep{jeffrey_evidence_2024, rizvi_learning_2024}.}
+Using a neural network \( f_\phi(\bx; \btheta) \in \mathbb{R} \) and sigmoid activation \( \sigma(\cdot) \), the loss becomes
+\begin{equation}
+\label{eqn:NRE_loss}
+\mathcal{L}_\text{NRE} = 
+- \frac{1}{|\mathcal{D}|} \sum_{(\bx, \btheta) \in \mathcal{D}} \log \sigma \left(f_\phi(\bx; \btheta) \right)
+- \frac{1}{|\mathcal{D}_c|} \sum_{(\bx, \btheta) \in \mathcal{D}_c}
+\log \sigma \left(-f_\phi(\bx; \btheta) \right)\;.
+\end{equation}
+The network \( f_\phi \) takes both \( \bx \) and \( \btheta \) as input and outputs a scalar score. The full training procedure is summarized in Alg.~\ref{alg:NRE}.
+
+\paragraph{Asymptotic behavior and posterior recovery.}
+
+In the limit of infinite training data, the BCE loss can be written as
+\begin{multline}
+\mathcal{L}_\text{NRE} \underset{N \to \infty}{\longrightarrow}
+\mathbb{E}_{p(\bx, \btheta)}
+\log \frac{1 + e^{-f_\phi(\bx; \btheta)}}{1 + r^{-1}(\bx; \btheta)}
++
+\mathbb{E}_{p(\bx)p(\btheta)}
+\log \frac{1 + e^{f_\phi(\bx; \btheta)}}{1 + r(\bx; \btheta)}
+\\
+-
+\mathbb{E}_{p(\bx)} D_{\text{JS}}(p(\btheta) \,\|\, p(\btheta \mid \bx))\;.
+\label{eqn:NRE_long}
+\end{multline}
+The first two terms are non-negative and vanish when \( f_\phi(\bx; \btheta) = \log r(\bx; \btheta) \), i.e., when the classifier recovers the log likelihood-to-evidence ratio. The final term corresponds to the negative expected Jensen-Shannon divergence between the prior and posterior.
+
+Once the network has been trained, it implicitly defines an energy-based model for the posterior:
+\[
+q_\phi(\btheta \mid \bx) = \frac{1}{Z(\bx)} \, e^{f_\phi(\bx; \btheta)} \, p(\btheta),
+\]
+where \( Z(\bx) \) is an unknown normalizing constant. (An energy-based model refers to any model of the form \( q(\btheta) \propto e^{-E(\btheta)} \), which defines a distribution up to a normalization constant.) In NRE, the value of \( Z(\bx) \) is typically close to 1 and is irrelevant in practice, since posterior sampling is performed using MCMC methods—just as in NLE in Sec.~\ref{sec:methods:density:nle}.
+
+\paragraph{Comparison with density-based approaches.}
+
+Unlike NPE and NLE, NRE does not require modeling normalized probability densities. Any expressive architecture (e.g., MLP) can be used to represent the classifier \( f_\phi(\bx; \btheta) \).
+
+NRE shares properties of both NLE and NPE. Like NLE, it is prior-independent. This is evident from Eq.~\eqref{eqn:lte-ratio}, where the prior cancels. Like NPE, NRE also supports end-to-end learning of data summaries. In fact, one can show that minimizing the BCE loss implicitly maximizes the expected Jensen-Shannon divergence between posterior and prior:
+\[
+\mathcal{L}_\text{NRE} \geq 
+- \mathbb{E}_{p(\bx)} D_{\text{JS}}(p(\btheta) \,\|\, p(\btheta \mid T_\phi(\bx)))
+\geq 
+- \mathbb{E}_{p(\bx)} D_{\text{JS}}(p(\btheta) \,\|\, p(\btheta \mid \bx)).
+\]
+In this sense, the learned summaries \( T_\phi(\bx) \) are information-maximizing—though with respect to JS divergence, not entropy as in NPE.
+
+This difference leads to a practical limitation. The Jensen-Shannon divergence is bounded above by \( \log 2 \), so if the posterior is much sharper than the prior—as often occurs in high-dimensional settings—the divergence saturates. As a result, the \emph{gradient signal for the summary network \( T_\phi(\bx) \)} becomes weak. In classification terms, this corresponds to the decision boundary between joint and product-of-marginals becoming too confidently separated: when \( r(\bx; \btheta) \gg 1 \) or \( \ll 1 \), the classifier assigns near-certain labels, and the loss becomes nearly flat with respect to changes in \( f_\phi \). Consequently, updates to the summary network vanish, hindering further improvement.
+
+As a result, NRE works well for low-dimensional inference problems, especially for estimating 1D or 2D marginal posteriors or building summary networks. In high dimensions, however, it generally struggles to capture the full joint posterior accurately. Autoregressive extensions have been proposed to mitigate this limitation~\cite{us}.
+
+
+\subsection{Likelihood-Ratio Estimation}
+\label{sec:methods:ratios:lre}
+
+\cw{TODO: Drop this section? Or keep it for pedagotical reasons?}
+
+Likelihood-ratio estimation (LRE) is one of the earliest simulation-based inference strategies to be explored~\citep{Cranmer2015ApproximatingLikelihoodRatios}. It is particularly appealing in frequentist settings, where hypothesis testing often reduces to the comparison of likelihoods under different parameter values. The goal is to estimate the likelihood ratio
+\[
+r(\bx; \btheta_1, \btheta_2) = \frac{p(\bx \mid \btheta_1)}{p(\bx \mid \btheta_2)},
+\]
+using a neural network that takes as input the tuple \( (\bx, \btheta_1, \btheta_2) \) and returns an estimate of the logarithmic ratio.
+
+As in neural ratio estimation (NRE), training is framed as a binary classification problem. Samples are generated from two simulation runs: one using parameter \( \btheta_1 \), and the other using \( \btheta_2 \). The task of the network is to distinguish whether a given observation \( \bx \) was drawn from \( p(\bx \mid \btheta_1) \) (label 1) or from \( p(\bx \mid \btheta_2) \) (label 0). The network \( f_\phi(\bx, \btheta_1, \btheta_2) \in \mathbb{R} \) is trained using the binary cross-entropy loss,
+\[
+\mathcal{L}_\text{LRE} = 
+- \mathbb{E}_{\bx \sim p(\bx \mid \btheta_1)} \log \sigma(f_\phi(\bx, \btheta_1, \btheta_2))
+- \mathbb{E}_{\bx \sim p(\bx \mid \btheta_2)} \log \sigma(-f_\phi(\bx, \btheta_1, \btheta_2))\;,
+\]
+where \( \sigma(\cdot) \) denotes the sigmoid function. At convergence, the optimal classifier satisfies
+\[
+f_\phi(\bx, \btheta_1, \btheta_2) \approx \log \frac{p(\bx \mid \btheta_1)}{p(\bx \mid \btheta_2)}\;,
+\]
+thus directly estimating the log-likelihood ratio of interest.
+
+While conceptually straightforward and prior-independent, LRE presents practical challenges not encountered in NRE. In NRE, the network distinguishes between \( p(\bx \mid \btheta) \) and the marginal \( p(\bx) \), which guarantees full support overlap. In contrast, LRE compares two potentially disjoint conditionals. If the supports of \( p(\bx \mid \btheta_1) \) and \( p(\bx \mid \btheta_2) \) do not overlap significantly, the classifier becomes overconfident, assigning near-certain labels regardless of input. This leads to gradient saturation and poor training dynamics, especially for high-dimensional or sharply peaked posteriors.
+This can be mitigated by estimating ratios between intermediate parameters with overlapping support and chaining them together as a telescoping product.
+
+%\input{drafts/model_comparison.tex}
+%\input{drafts/gradient_based_techniques}
+
+\section{Advanced Methods}
+\label{sec:methods:advanced}
+
+\cw{TODO: Write advanced method section}
+

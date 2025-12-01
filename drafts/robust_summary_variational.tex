@@ -1,0 +1,95 @@
+\subsubsection{Technical Implementation Challenges}
+
+The conditional mutual information in Eq.~\eqref{eqn:IIB_objective} can be, \fex\ estimated through an approximate variational upper bound based on the CLUB estimator~\citep{cheng_club_2020},
+%
+\begin{equation}
+\mathcal{I}(T_\phi(\bx); \bgamma \mid \btheta) \lesssim
+\mathbb{E}_{p(\bx, \btheta, \bgamma)} 
+\left[ \log q_\psi(T_\phi(\bx) \mid \bgamma, \btheta) \right]
+- 
+\mathbb{E}_{p(\btheta, \bgamma)p(\bx \mid \btheta)}
+\left[ \log q_\psi(T_\phi(\bx) \mid \bgamma, \btheta) \right] \;
+\label{eqn:likelihood_bias_bound}
+\end{equation}
+Here, we introduced an auxiliary network $q_\psi(T_\phi(\bx) \mid \gamma, \theta)$ that approximates the conditional distribution of summaries.  Alternatively to CLUB, for instance adversarial estimates of the conditional mutual information are possible~\citep{xxx}.
+
+For deterministic and continuous summaries, the term 
+$\mathcal{I}(T_\phi(\bx);\bx)$ is actually formally ill-defined.\footnote{Under common 
+regularization schemes, 
+$\mathcal{I}(T_\phi(\bx);\bx)$ reduces to a differential entropy term 
+$\mathcal{H}(T_\phi(\bx))$ plus a regularization-dependent constant.  
+However, differential entropy is scale-dependent, and the penalty can always be reduced  simply by shrinking the scale of $T_\phi(\bx)$, rendering it unsuitable as a direct  optimization target.} 
+A standard remedy—used, for example, in the variational information bottleneck (VIB)~\citep{xxx}—is  to inject a small, fixed amount of noise into the representation, which fixes the scale  and renders the mutual information well-defined. In practice on often uses structured proxies for compression, such as dimensionality reduction, sparsity  constraints, or gating mechanisms~\citep{xxx}.   These serve as practical surrogates for the idealized SIB objective.   
+
+\paragraph{Variational Bound for Invariant Information Bottleneck}
+
+We illustrate here, for a simple example, how the IIB and SIB objectives, Eqs.~\eqref{eqn:IIB_objective} and~\eqref{eqn:SIB_objective}, can be implemented in practice. Our aim is to demonstrate how type~A epistemic uncertainty---stemming from mismatches between the simulator and the true data-generating process---can be transformed into type~B uncertainty, arising from information loss. This trade-off enables more robust inference by reducing the influence of unreliable or ambiguous aspects of the simulator.
+
+\paragraph{Variational Bounds for Mutual Information and Entropy}
+
+In order estimate the conditional mutual information in Eq.~\eqref{eqn:IIB_objective} in a tractable way, we use an approximate variational upper bound inspired by the CLUB estimator~\citep{cheng_club_2020}
+%
+\begin{equation}
+\mathcal{I}(T_\phi(\bx); \bgamma \mid \btheta) \lesssim
+\mathbb{E}_{p(\bx, \btheta, \bgamma)} 
+\left[ \log q_\phi(T_\phi(\bx) \mid \bgamma, \btheta) \right]
+- 
+\mathbb{E}_{p(\btheta, \bgamma)p(\bx \mid \btheta)}
+\left[ \log q_\phi(T_\phi(\bx) \mid \bgamma, \btheta) \right] \;.
+\label{eqn:likelihood_bias_bound}
+\end{equation}
+%
+In practice, we can then minimise the upper bound as surrogate for minimising the mutual information directly. The second term is here estimated using mismatched pairs: summaries generated from samples \( \bx \sim p(\bx \mid \btheta) \), but evaluated under different configurations \( \bgamma \).  Note that the variational upper bound is only approximate (it becomes strict for exact $q_\phi$), but it features a useful structural property: the gradient with respect to \( T_\phi(\bx) \) vanishes when \( q_\phi \) becomes independent of \(\bgamma\). This independence is, in fact, the desired outcome.
+
+In a similar way we obtain the upper bound
+%
+\begin{equation}
+\mathcal{H}(T_\phi(\bx)) 
+\equiv - \mathbb{E}_{p(\bx)} \left[ \log p(T_\phi(\bx)) \right]
+\;\leq\;
+- \mathbb{E}_{p(\bx, \bgamma, \btheta)} 
+\left[ \log q_\phi(T_\phi(\bx) \mid \bgamma, \btheta) \right] \;,
+\label{eqn:entropy_bound}
+\end{equation}
+%
+which is exact in the limit where $q_\phi$ does not depend on $\bgamma$ and $\btheta$.
+\cw{Maybe extend this with more relevant examples}
+
+
+\paragraph{A Variational Training Objective for Robust Summaries}
+
+We now define a training objective that integrates four components: (1) an amortized posterior term that encourages informativeness with respect to \(\btheta\), and that is conditioned on model configurations $\bgamma$, (2) an auxiliary density estimator for the summary conditioned on \((\bgamma, \btheta)\), (3) a robustness regularizer via the variational upper bound on \(\mathcal{I}(T_\phi(\bx); \bgamma \mid \btheta)\), and (4) a sparsity regularizer based on the entropy bound from Eq.~\eqref{eqn:entropy_bound}.
+
+This leads to the following composite loss:
+%
+\begin{multline}
+    \mathcal{L}[\phi_T, \phi_\theta, \phi_q] =
+    \\[0.5em]
+    -\underbrace{
+    \mathbb{E}_{p(\bx, \btheta, \bgamma)}\left[\log 
+    q_{\phi_\theta}(\btheta \mid T_{\phi_T}(\bx), \bgamma)\right]
+    }_{\text{parameter inference \& informative summary}}
+    -\underbrace{
+    \mathbb{E}_{p(\bx, \btheta, \bgamma)} \left[\log q_{\phi_q}(
+    T_{\bar{\phi}_T}(\bx) \mid \btheta, \bgamma)\right]
+    }_{\text{auxiliary summary modeling}}
+    \\[0.5em]
+    + \lambda \cdot \underbrace{
+    \left(
+    \mathbb{E}_{p(\btheta, \bgamma)\,p(\bx \mid \btheta, \bgamma)} 
+    \left[ \log q_{\bar{\phi}_q}(T_{\phi_T}(\bx) \mid \bgamma, \btheta) \right]
+    -
+    \mathbb{E}_{p(\btheta, \bgamma)\,p(\bx \mid \btheta)}
+    \left[ \log q_{\bar{\phi}_q}(T_{\phi_T}(\bx) \mid \bgamma, \btheta) \right]
+    \right)
+    }_{\text{configuration invariance regularizer}}
+    \\[0.5em]
+    - \beta \cdot \underbrace{
+    \mathbb{E}_{p(\bx, \btheta, \bgamma)} \left[ \log q_{\bar{\phi}_q}(
+    T_{\phi_T}(\bx) \mid \bgamma, \btheta) \right]
+    }_{\text{sparsity regularizer}}
+\end{multline}
+%
+Here, \(\phi_T\) parametrizes the summary network \(T_{\phi_T}(\bx)\), \(\phi_\theta\) the posterior estimator, and \(\phi_q\) the auxiliary density model used to evaluate the entropy and mutual information bounds. When computing gradients, expressions involving barred parameters (e.g., \(\bar{\phi}_T\), \(\bar{\phi}_q\)) are treated as constants and do not contribute to backpropagation. This is typically implemented via explicit gradient detachment.
+
+The hyperparameters $\lambda$ and $\beta$ control the relative influence of the robustness and sparsity regularizers, respectively, and therefore determine the balance between invariance and compression. When $\lambda>0$ and $\beta=0$, the objective prioritizes simulator invariance by suppressing configuration-dependent variation without restricting the overall capacity of the summary. Conversely, choosing $\lambda=0$ and $\beta>0$ enforces compression alone, limiting the information content of the summary and reducing sensitivity to unmodeled sources of mismodeling. When both coefficients are positive, with $\lambda>\beta>0$, the objective achieves a controlled compromise, encouraging representations that are simultaneously robust to simulator variation and sufficiently compressed to avoid encoding extraneous or unstable features.

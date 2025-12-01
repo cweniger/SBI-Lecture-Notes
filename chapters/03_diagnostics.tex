@@ -1,0 +1,1201 @@
+\chapter{Diagnostics for Simulation-Based Inference}
+\label{chap:diag}
+
+\begin{quotation}
+    \textit{``When a fail-safe system fails, it fails by failing to fail-safe.''}
+
+    \hfill --- John Gall, 1977, The Systems Bible
+\end{quotation}
+
+
+\section{A Taxonomy for Epistemic Uncertainties}
+\label{sec:diag:taxonomy}
+
+To validate simulation-based inference reliably, it is crucial to distinguish between uncertainties inherent to the data-generating process and those arising from imperfections in the inference pipeline. The former, called \emph{aleatoric uncertainty}, reflects irreducible randomness in observations and remains even with perfect inference. The latter, \emph{epistemic uncertainty}, arises from limited knowledge, model mismatch, or approximation error, and can in principle be reduced through better modeling or more computation \citep{kiureghian_aleatory_2009, kendall_what_2017}.
+
+We propose a taxonomy of epistemic uncertainties that follows the three principal components of SBI (Fig.~\ref{fig:sbi_overview}), though the underlying failure modes apply to statistical inference more broadly. While \emph{all} methods face model misspecification (Type A) and inference approximation errors (Type C), the reliance on summary statistics and associated information loss (Type B) is more explicit in SBI, though present in any inference technique. These three types are summarized in Table~\ref{tab:uncertainty_taxonomy}.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Category} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\textbf{Epistemic}
+    & Type A & Misspecified model \\
+    & & \textit{``I'm simulating the wrong world''} \\
+\cmidrule(l){2-3}
+    & Type B & Lossy summary \\
+    & & \textit{``I'm discarding relevant information''} \\
+\cmidrule(l){2-3}
+    & Type C & Inexact inference \\
+    & & \textit{``I can't compute the posterior exactly''} \\
+\midrule
+\textbf{Aleatoric} & & Irreducible randomness \\
+\bottomrule
+\end{tabular}
+\caption{Proposed taxonomy of epistemic and aleatoric uncertainties in simulation-based inference.\label{tab:uncertainty_taxonomy}}
+\end{table}
+
+
+\subsection{Type A: Misspecified Model}
+
+If the assumed simulator does not sufficiently reflect the true data-generating process, this mismatch can lead to two distinct types of problems: poor description of the observed data, and systematic biases in inferring causally meaningful parameters. These challenges have been recognized for decades, with extensive literature examining how misspecification affects data description~\citep[\fex][]{white_maximum_1982} versus parameter estimation~\citep[\fex][]{hausman_specification_1978}. As \cite{box_science_1976} famously noted, ``all models are wrong, but some are useful.'' In the modern machine learning literature, related challenges include distribution shifts and domain generalization~\citep[for a recent overview see][]{zhou_domain_2022}.
+
+\begin{description}[leftmargin=2em, labelwidth=1.5em, labelsep=0.5em, itemsep=0.75em]
+\item[{\small\faSearch}] \textbf{Diagnostics:} Primarily addressed through model misspecification diagnostics~\eqref{sec:diag:misspec}, including robustness checks~\eqref{sec:diag:misspec:robustness}, posterior predictive tests~\eqref{sec:diag:misspec:ppc}, and comparative model diagnostics~\eqref{sec:diag:misspec:comparative}. When a reference posterior is available, comparison~\eqref{sec:diag:reference} can additionally reveal systematic biases arising from model mismatch.
+
+\item[{\small\faShield}] \textbf{Mitigation:} Ideally, refine the simulator to better capture the true data-generating mechanism based on diagnostic outcomes. Alternatively, when some aspects of the model remain uncertain, design inference procedures that are robust to known sources of uncertainty via simulator uncertainty methods~\eqref{sec:adv:uncertainty}, such as robust summary learning~\eqref{sec:adv:uncertainty:robust}.
+\end{description}
+
+
+\subsection{Type B: Lossy Summary}
+
+For practical reasons, inference tasks often focus on specific aspects or subsets of available data, tightly linked to the modeling choices themselves. In simulation-based methods, this takes the form of explicit reliance on summary statistics that compress the data to extract correlations with parameters of interest. In likelihood-based contexts, this reliance is typically implicit, manifested through the selection of data subsets, regions of interest, or specific observables—choices often driven by where probabilistic modeling is computationally feasible. Except in idealized cases, this data compression is necessarily lossy~\citep{lehmann_theory_1998, marin_approximate_2011}, potentially leading to reduced precision in parameter estimates while still permitting valid Bayesian inference with potentially appropriately broader posteriors. The goal is to keep this information loss sufficiently small and to maximize the extraction of \emph{relevant} information for inference.
+
+\begin{description}[leftmargin=2em, labelwidth=1.5em, labelsep=0.5em, itemsep=0.75em]
+\item[{\small\faSearch}] \textbf{Diagnostics:} In situations where the true posterior is tractable, reference posterior diagnostics~\eqref{sec:diag:reference} can quantify information loss. Otherwise, detection is challenging since many standard tests are completely insensitive to this failure mode, including common posterior coverage tests~\eqref{sec:diag:forward_back:coverage}. However, model-based forward-backward diagnostics~\eqref{sec:diag:forward_back:model_based} can detect cases of information loss.
+
+\item[{\small\faShield}] \textbf{Mitigation:} If the achieved precision is acceptable for the scientific question at hand, or if information loss is intentionally introduced to mitigate Type~A errors, no mitigation is needed. Otherwise, increase network capacity, adopt more expressive architectures, or apply information-theoretic principles for summary design~\e qref{sec:found:summaries} to construct more informative features.
+\end{description}
+
+
+\subsection{Type C: Inexact Inference}
+
+Even with a well-specified simulator and all relevant information extracted from the data, inference results can still be systematically incorrect. This arises when the inference algorithm fails to accurately approximate the true posterior defined by the chosen simulator and data summary. Common causes include inappropriate assumptions about posterior or likelihood shapes, insufficient computational budgets leading to approximation errors, non-convergence issues, and numerical inaccuracies. In likelihood-based inference, extensive diagnostic frameworks have been developed to detect such problems~\citep[\fex][]{gelman_inference_1992}. Although testing these issues using simulated data with known ground truth is often computationally costly, the development of robust diagnostic tools continues to make such validation increasingly practical and reliable.
+
+\begin{description}[leftmargin=2em, labelwidth=1.5em, labelsep=0.5em, itemsep=0.75em]
+\item[{\small\faSearch}] \textbf{Diagnostics:} When available, direct comparison to a reference posterior~\eqref{sec:diag:reference} provides a strong diagnostic, though results may be confounded with Type~B errors. Forward-backward diagnostics~\eqref{sec:diag:forward_back} offer efficient and targeted tests that can isolate inference approximation errors.
+
+\item[{\small\faShield}] \textbf{Mitigation:} Increase training compute and data budget to improve convergence. Refine optimization procedures, adjust learning rate schedules, and experiment with alternative network architectures. More generally, follow established deep learning best practices for training stability and convergence.
+\end{description}
+
+\medskip
+
+The classification into Types~A--C reflects different levels of the analysis pipeline, but also different severity: Type~B is often acceptable and quantifiable, Type~C can typically be reduced with better algorithms or more compute, while Type~A reflects deeper mismatches that typically require specific domain knowledge that goes beyond the scope of statistical inference. 
+
+
+\section{Building Systems that Work}
+
+\begin{quote}
+\textit{``A complex system that works is invariably found to have evolved from a simple system that worked. A complex system designed from scratch never works and cannot be patched up to make it work. You have to start over with a working simple system.''}
+
+\hfill --- John Gall, 1977, The Systems Bible
+\end{quote}
+
+\noindent
+\textbf{Building a working SBI pipeline is like building a clockwork mechanism.} You do not order gears, springs, and escapements, immediately assemble everything according to your initial design, wind it up, and expect it to tick. That approach guarantees failure---and when nothing moves, you have no idea which of the hundred components is responsible.
+
+Instead, a clockmaker works iteratively: start with the main gear system, verify it rotates smoothly. Add the escapement, check it regulates correctly. Add the pendulum, verify synchronization. At each step, the mechanism \textit{works}---it just does not yet do everything you ultimately need.
+
+\medskip
+
+The same principle applies to SBI. The diagnostic methods in Sections~\ref{sec:diag:reference}--\ref{sec:diag:misspec} are designed to identify specific failures in \textit{nearly-working} systems. Applied to completely broken pipelines, they generate noise. Applied to incrementally refined systems, they can pinpoint exactly what is wrong.
+
+\cw{TODO: Polish the below list}
+
+\paragraph{The Iterative Refinement Workflow}
+
+\begin{enumerate}
+\item \textbf{Start minimal}: Toy data, known sufficient statistics, simple networks, few parameters
+\item \textbf{Validate thoroughly}: Run diagnostics (SBC, coverage, PPCs)
+\item \textbf{Add one component}: Learned summaries \textit{or} realistic noise \textit{or} more parameters---not all at once
+\item \textbf{Re-validate}: If diagnostics pass, proceed. If they fail, you know what broke.
+\item \textbf{Iterate}: Repeat until you reach full problem complexity
+\end{enumerate}
+
+\textbf{Key principles:}
+\begin{itemize}
+\item When making progress: trust previously validated components
+\item When stuck: question everything, including ``working'' components validated under different conditions
+\item Each failure should point to a clear next step
+\item If you can't explain your problem in 5 sentences, your example isn't minimal enough
+\end{itemize}
+
+The diagnostics that follow are powerful tools when applied systematically. The iterative methodology ensures they provide actionable information rather than overwhelming noise.
+
+
+
+
+
+\section{Reference Posterior Diagnostics}
+\label{sec:diag:reference}
+
+An important question for the reliability of SBI is how well a learned posterior $q_\phi(\btheta \mid \bxobs)$ approximates the true Bayesian posterior $p(\btheta \mid \bxobs)$ under the generating model. When a reference posterior is available that is close enough to the true Bayesian one---either analytically, through Fisher approximations, or via high-quality MCMC samples---we can use it as ground truth to assess the learned posterior's accuracy:
+%
+\begin{equation}
+    q_\phi(\btheta \mid \bxobs)
+    \;\;\xleftrightarrow{\text{consistent with?}}\;\;
+    p(\btheta \mid \bxobs)
+\end{equation}
+%
+Such situations occur mainly in simplified setups or low-dimensional models where likelihood-based inference remains feasible.
+
+From the perspective of the epistemic uncertainty taxonomy (Sec.~\ref{sec:diag:taxonomy}), different uncertainty types manifest differently in these comparisons. When both posteriors are derived from simulated data $\bx$, discrepancies typically reflect \textbf{Type B} (lossy summary) or \textbf{Type C} (inexact inference) uncertainties. Information loss usually manifests as broadened learned posteriors, while inference approximation errors often appear as biases, missing modes, or other structural distortions. When comparing posteriors derived from \emph{real} data $\bxobs$, \textbf{Type A} (misspecified model) uncertainties can introduce additional discrepancies, since SBI and other methods may respond differently under model misspecification~\citep{cannon_investigating_2022}.
+
+
+\subsection{f-Divergences and Mismatch Sensitivity}
+\label{sec:diag:reference:divergences}
+
+A natural way to quantify discrepancies between a learned posterior and a reference posterior is through divergence measures. Divergences reduce differences between distributions to a single scalar but differ in their sensitivity to specific types of mismatch, such as shifts in location, changes in spread, or differences in tail behaviour. This sensitivity can help diagnose \emph{which type of error} we are dealing with.
+
+Common examples include the Kullback--Leibler (KL), Jensen--Shannon (JS), and Neyman $\chi^2$ divergences. These divergences fall in the broad category of $f$-divergences, which are generally defined as\footnote{Historically, $f$-divergences were first introduced by \cite{renyi_measures_1960} (see \cite{sason_divergence_2022} for historical context). Mathematical definitions and many of their theoretical properties are discussed in \cite{liese_divergences_2006, pardo_statistical_2018}, while recent applications in machine learning include training energy-based models \cite{yu_training_2020} and imitation learning \cite{ke_imitation_2020}.}
+\begin{equation}
+    D_f(p \mid\mid q) \equiv \int d\btheta\, q(\btheta) f\left(\frac{p(\btheta)}{q(\btheta)}\right)\;.
+    \label{eqn:f_divergence}
+\end{equation}
+Here, $f: [0, +\infty)\to (-\infty, +\infty]$ is the \emph{generator} of a particular $f$-divergence. General properties that it has to satisfy include that $f(t)$ is convex and $f(t=1) = 0$. In all cases, $D_f$ is non-negative and equals zero only when $q(\btheta)=p(\btheta)$ almost everywhere.
+
+
+\subsubsection{Common $f$-Divergences}
+
+Some common $f$-divergences can be found in Tab.~\ref{tab:divergences}. They include the Kullback--Leibler divergence, which plays a prominent role in information theory, but also related quantities such as the total variation distance, the Jensen--Shannon divergence, and others. Some of these divergences are symmetric under $q \leftrightarrow p$ by construction, which we indicate by writing $D(p; q)_f$ instead of $D(p \mid\mid q)_f$. This symmetry property is related to the fact that, in general, $f$-divergences obey $D_f(p \mid\mid q) = D_g(q \mid\mid p)$ with $g(t) = t f(1/t)$. See~\citep{liese_divergences_2006, pardo_statistical_2018} for a discussion of their connections and relations.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{llc}
+        \toprule
+        \textbf{Divergence} &
+        \textbf{Name} & \textbf{Corresponding } $f(t)$ \\
+        \midrule
+        $D_{KL}(p\mid\mid q)$ & KL divergence & $t \log t$ \\
+        $D_{\chi^2}(p\mid\mid q)$ & Neyman $\chi^2$-divergence & $(t - 1)^2$ \\
+        $D_{J}(p; q)$ & Jeffreys divergence & $(t - 1) \log(t)$ \\
+        $D_{JS}(p; q)$ & Jensen-Shannon divergence & $\frac{1}{2}\left(t \log t - (t + 1) \log \left(\frac{t + 1}{2}\right)\right)$ \\
+        $D_{TV}(p; q)$ & Total variation distance & $\frac{1}{2}|t - 1|$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{Selected $f$-divergence measures $D(p \mid \mid q)_f$, and their corresponding generators $f(t)$. The usage of a semicolon, $D(p ; q)_f$, indicates that the divergence is symmetric.}
+    \label{tab:divergences}
+\end{table}
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/div_shapes.png}
+    \includegraphics[width=0.49\linewidth]{figures/div_values.png}
+    \caption{
+        Illustration of how different divergences respond to different types of posterior mismatch.
+        \textit{Left:} Reference distribution $q(\theta)$ (black dashed) and three approximate distributions exhibiting different types of mismatch: $p_1(\theta)$ with bias (blue), $p_2(\theta)$ with overdispersion (orange), and $p_3(\theta)$ with an additional mode (green). 
+        \textit{Right:} Divergence values between the reference and approximate distributions, demonstrating that different divergence measures exhibit varying sensitivity to different aspects of posterior mismatch. Metrics are rescaled as indicated to ease comparison and ordered by relative sensitivity to unmodeled modes. \cw{TODO: Fix figure labels}
+    }
+    \label{fig:posterior_divergences}
+\end{figure}
+
+
+\subsubsection{Sensitivity to Common Distortions} 
+
+In Fig.~\ref{fig:posterior_divergences}, we illustrate how the divergence measures listed in Tab.~\ref{tab:divergences} differ in their sensitivity to common types of distributional mismatch. We compare the values of various divergences between a fixed learned posterior $q$---here taken to be a Gaussian---and three different reference posteriors that exhibit, respectively, a shift, a broadening, or heavy tails. To ease comparison across divergences, the plotted values have been rescaled as indicated in the figure labels, such that the case of a shifted posterior yields comparable numbers.\footnote{The rescaling factor corresponds to the second derivative of the generator, $f''(t)\rvert_{t=1}$, which governs the leading behaviour when $p$ is close to $q$, except for TV where the factor was chosen ad hoc.}
+
+A few observations can be made:
+\begin{itemize}
+    \item \textbf{Shifts and broadenings} ($p_1$ and $p_2$): After rescaling, all divergences react similarly to small location shifts or changes in spread.
+    \item \textbf{Heavy tails} ($p_3$): The divergences behave very differently. This reflects how their generators $f(t)$ weight the regimes $t \ll 1$ and $t \gg 1$.
+    \item \textbf{KL asymmetry}: $D_{KL}(p\mid\mid q)$ strongly responds to the additional tail in $p_3$, whereas the reverse KL $D_{KL}(q\mid\mid p)$ is largely insensitive.
+    \item \textbf{Neyman $\chi^2$}: Shows an even stronger asymmetry than KL, amplifying deviations in the $t \gg 1$ regime.
+    \item \textbf{Symmetric divergences}: TV is largely insensitive to the $p_3$ tail, while JS and J divergences detect it.
+\end{itemize}
+
+As we will discuss next, the high sensitivity to tail behaviour exhibited by some $f$-divergences comes at the cost of numerical instability when they are estimated from finite samples. In practice, the Jensen--Shannon divergence often provides a useful compromise: it is sufficiently sensitive to missing mass while remaining comparatively stable under sampling noise.
+
+\subsection{Estimating Divergences from Samples}
+\label{sec:diag:reference:estimation}
+
+The integral in Eq.~\eqref{eqn:f_divergence} can be approximated using Monte Carlo methods, exploiting the identities
+\begin{equation}
+    D_f(p\mid\mid q)
+    = \mathbb E_{q(\btheta)}[f(t)]
+    = \mathbb E_{p(\btheta)}[t\, f(1/t)]
+    \;,
+    \label{eqn:f_div_approx}
+\end{equation}
+where $t(\btheta)=p(\btheta\mid\bx)/q_\phi(\btheta\mid\bx)$ denotes the density ratio. Thanks to the symmetry properties of $f$-divergences discussed above, these expectations can be estimated using samples from either $p(\btheta)$ or $q(\btheta)$. In the rare cases where both the learned and reference posteriors can be evaluated explicitly, these expressions can be used directly. In all other cases, additional estimation strategies are required, as discussed below.
+
+
+\subsubsection{Density-Evaluation-Based Divergence Estimation}
+
+In situations where the likelihood function $p(\bx \mid \btheta)$ is explicitly known, we generally only have access to the unnormalised posterior $\pi(\btheta \mid \bx) = p(\bx\mid\btheta)\,p(\btheta) = Z\,p(\btheta \mid \bx)$, precluding a direct application of Eq.~\eqref{eqn:f_div_approx}. However, if we can explicitly evaluate the density of the learned posterior $q_\phi(\btheta \mid \bx)$, we can use it to estimate the missing normalisation factor $Z$.
+
+Assuming that we have $N$ samples $\btheta_i \sim q_\phi(\btheta \mid \bx)$, we can estimate the normalization constant of $\pi(\btheta \mid \bx)$ through
+$$
+Z\simeq\frac1N\sum_{i=1}^N 
+\frac{\pi(\btheta \mid \bx)}{q_\phi(\btheta \mid \bx)} \;.
+$$
+In the limit $N\to \infty$, the sum turns into an integral over $\btheta$, yielding the definition of $Z= \int d\btheta\, \pi(\btheta \mid \bx)$.\footnote{On the other hand, if we have $N$ samples
+$\btheta_i \sim p(\btheta \mid \bx)$, which one can obtain from $\pi(\btheta \mid \bx)$ by, \fex\ MCMC methods, we can estimate $Z$ via a similar expression,
+$
+Z = \left(\frac1N\sum_{i=1}^N \frac{q_\phi(\btheta \mid \bx)}{\pi(\btheta \mid \bx)}\right)^{-1}\;.
+$}
+%
+We can then approximate posterior density ratios through the weights
+\begin{equation}
+w_i =  \frac
+{\pi(\btheta_i\mid \bx)}
+{Z\,q_\phi(\btheta_i\mid\bx)}
+\simeq \frac{p(\btheta \mid \bx)}  
+{q_\phi(\btheta_i\mid\bx)}\;.
+\label{eqn:def_w_i}
+\end{equation}
+
+The application of variations of Eq.~\eqref{eqn:f_div_approx} allows then to compute any $f$-divergence of interest.  As a concrete illustrative examples, we estimate the forward KL divergences from $N$ learned posterior samples, $\btheta_i \sim q_\phi(\btheta \mid \bx)$.  The corresponding expression is 
+$$
+D_{KL}(q_\phi\mid\mid p) 
+\equiv \int d\btheta \, q_\phi(\btheta \mid \bx)
+\log \frac{q_\phi(\btheta \mid \bx)}{p(\btheta \mid \bx)}
+\simeq \frac1N \sum_{i=1}^N \log w_i\;.
+$$
+We note that a similar expression can be found based on samples from the references posterior, using the general symmetry properties of $f$-divergences.
+
+
+\subsubsection{Sampling-Based Divergence Estimation}
+
+In situations where only samples from the reference and learned posteriors are available, a natural approach is to estimate the density ratio $t(\btheta) \equiv p(\btheta)/q(\btheta)$ directly from samples, for instance using kernel density estimates for both distributions followed by pointwise division. This then allows a direct application of Eq.~\eqref{eqn:f_div_approx}. 
+
+A more common and often simpler strategy is to bin the samples and compute divergences between the resulting normalised histograms. Binning methods are only suitable in very low-dimensional parameter spaces (one or two dimensions), since higher dimensions inevitably lead to many bins with few or zero samples.
+
+As an example, assume that samples from the reference posterior $p$ and the learned posterior $q_\phi$ have been binned into $K$ bins, and let $\{m_i\}$ and $\{n_i\}$ denote the corresponding counts, normalised such that $\sum_i m_i = \sum_i n_i = N$. The binned Jensen--Shannon (JS) divergence is then
+\[
+D_{\mathrm{JS}}(q\,\|\,p)
+= \frac{1}{N} \sum_{i=1}^K 
+\left[
+n_i \log \frac{2n_i}{n_i + m_i}
++
+m_i \log \frac{2m_i}{n_i + m_i}
+\right]\;.
+\]
+A useful feature of the JS divergence is that it remains finite even when $n_i = 0$ or $m_i = 0$, which makes it far more stable than most other $f$-divergences under finite-sample fluctuations. This numerical robustness makes the binned JS divergence a practical tool for comparing posteriors.\footnote{For completeness, the corresponding binned KL and Pearson $\chi^2$ divergences are
+\[
+D_{\mathrm{KL}}(p\,\|\,q) = \frac{1}{N}\sum_{i=1}^K m_i \log\!\left(\frac{m_i}{n_i}\right)
+\qquad\text{and}\qquad
+D_{\chi^2}(p\,\|\,q) = \frac{1}{N}\sum_{i=1}^K \frac{(n_i - m_i)^2}{\,n_i\,}\;.
+\]
+Both divergences are asymmetric and become ill-defined when $n_i = 0$ (except in the trivial case $m_i = n_i = 0$ for KL). This behaviour reflects the fact that they strongly penalize the learned posterior $q_\phi$ for assigning mass to regions where the reference posterior $p$ assigns none (see Fig.~\ref{fig:posterior_divergences}).}
+
+
+\subsection{Normalised Importance Sampling from the True Posterior}
+\label{sec:diag:reference:nis}
+
+% TODO: Think this through carefully again, in connection with particle filter and SMC
+This subsection is not a diagnostic method per se—it briefly describes a useful technique for obtaining (approximately) exact posterior samples when the unnormalised density $\pi(\btheta \mid \bx)$ can be evaluated. When $\pi(\btheta \mid \bx)$ is available, we can use samples from $q_\phi(\btheta \mid \bx)$ to importance sample from the ground-truth posterior $p(\btheta \mid \bx)$. The strategy is simple: (1) obtain $N$ samples from $q_\phi(\btheta \mid \bx)$, (2) calculate $w_i$ as defined in Eq.~\eqref{eqn:def_w_i}, and (3) resample (with replacement) from the existing $q_\phi$ samples with probabilities $\tilde w_i = w_i / \sum_{j=1}^N w_j$. This procedure, known as \emph{normalised importance sampling} (NIS)~\citep{xxx}, yields an empirical approximation to $p(\btheta \mid \bxobs)$ that converges to the correct distribution as $N \to \infty$, provided that the support of $q_\phi(\btheta \mid \bxobs)$ includes that of $p(\btheta \mid \bxobs)$. This resampling step is the same normalised importance sampling update used in particle filters and Sequential Monte Carlo (SMC) methods.
+
+
+\subsubsection{Effective Sample Size Diagnostic}
+
+When $q_\phi(\btheta \mid \bxobs)$ deviates substantially from the true posterior, the importance weights develop a high variance and only a few samples dominate the resampling process while most contribute negligibly. To quantify this effect, we define the effective sample size (ESS) as
+\[
+\text{ESS} \equiv \frac{1}{\sum_{i=1}^N \tilde w_i^2} \;.
+\]
+By construction, $1 \leq \text{ESS} \leq N$. The upper bound is saturated when all weights are equal (perfect match between proposal and target), and the lower bound when a single sample carries essentially all weight. The ESS thus provides a direct measure of how many samples effectively contribute to Monte Carlo estimation.\footnote{For instance, consider the weighted posterior mean $\bar\theta_i = \sum_j \tilde w_j \theta_i^{(j)}$. Its variance is approximately $\mathrm{Var}(\bar \theta_i) \simeq \frac{1}{\mathrm{ESS}} \, \mathrm{Var}_{q_\phi}[\theta_i]$. Thus, a low ESS implies high variance in reweighted estimates—even if $N$ is large.}
+
+\medskip
+
+Interestingly, this method not only provides a diagnostic for the fidelity of the learned posterior but also a way to correct it through NIS. The only remaining approximation then arises from finite sample size. Two important caveats should be kept in mind. First, the method requires that the support of \( q_\phi(\btheta \mid \bxobs) \) covers that of the true posterior: if \( q_\phi \) assigns negligible mass to regions where \( p(\btheta \mid \bxobs) \) is large—such as missing isolated modes—then importance sampling fails, and the ESS may not reliably flag the issue. Second, the ESS is expected to become small in sufficiently high-dimensional settings, because approximation errors of the learned posterior accumulate and lead to highly variable importance weights.
+
+
+
+\section{Forward--Backward Diagnostics}
+\label{sec:diag:forward_back}
+
+In Sec.~\ref{sec:diag:reference}, we discussed diagnostic techniques based on comparing the learned posterior with a suitable reference posterior, ideally the true Bayesian posterior. Such reference-based tests provide a strong external benchmark—SBI can still "hold on to a guiding hand."  However, in many realistic applications no such reference is available.
+
+In this situation, a common strategy is to test the internal consistency between the generative (forward) model and the learned inference (backward) model. Concretely, we compare joint samples from the backward model, \((\bx,\btheta)\sim p(\bx)\,q_\phi(\btheta\mid\bx)\), to joint samples from the forward model, \((\bx,\btheta)\sim p(\btheta)\,p(\bx\mid\btheta)\). If the learned posterior matches the true posterior, \(q_\phi(\btheta\mid\bx)=p(\btheta\mid\bx)\), then these two joint distributions coincide; conversely, any discrepancy between forward and backward samples is a clear indicator of inference error. 
+
+The basic consistency requirement can be summarised schematically as
+\begin{equation}
+q_\phi(\btheta\mid\bx)\,p(\bx)
+\;\;\xleftrightarrow{\text{consistent with?}}\;\;
+p(\bx\mid\btheta)\,p(\btheta)\;,
+\end{equation}
+and we will collectively refer to all tests based on this idea as \emph{forward--backward diagnostics}. They play the role of letting SBI "walk on its own": rather than relying on a known reference, these methods assess whether the inference model is consistent with the generative model it is meant to describe.
+
+\medskip
+
+From the perspective of the epistemic uncertainty taxonomy (Sec.~\ref{sec:diag:taxonomy}), forward-backward diagnostics have specific sensitivities. \textbf{Type A} (misspecified model) uncertainties are not detected, since both sides of the comparison are based on simulated data from the same assumed model. \textbf{Type B} (lossy summary) uncertainties are invisible for most common approaches, with a few notable exceptions discussed below. \textbf{Type C} (inexact inference) represents the primary target: forward--backward discrepancies can reveal most type~C epistemic uncertainties in the learned posterior.
+
+\subsection{Simulation-Based Calibration Diagnostics}
+\label{sec:diag:forward_back:sbc}
+
+Simulation-based calibration (SBC) is the simplest type of forward--backward consistency test.  It applies to cases where the posterior distribution is one-dimensional, and thus to any one-dimensional projection of multi-dimensional posteriors. SBC already features many of the key characteristics and challenges of forward--backward consistency tests, making it a natural starting point.
+
+
+\subsubsection{SBC Rank Statistics} 
+
+SBC is a \emph{rank-based} test: for a given observation $\bx$, draw one parameter value from the true posterior, $\theta^\ast \sim p(\theta \mid \bx)$, and then draw $L$ further samples $\theta_{1:L} \equiv \theta_1, \theta_2, \dots, \theta_L \sim q_\phi(\theta \mid \bx)$. The \emph{rank} of $\theta^\ast$ within $\theta_{1:L}$ is defined as the number of $\theta_i$ that happen to fall below $\theta^\ast$. If all $\theta_i$ and $\theta^\ast$ are i.i.d.\ from the same distribution, their joint distribution is exchangeable, which means that $\theta^\ast$ is equally likely to land at any of the $L+1$ possible rank positions. This procedure is then repeated and averaged over random data samples $\bx \sim p(\bx)$, making it possible to replace the infeasible posterior draw with a draw from the forward generative model.
+
+\medskip
+
+More formally, rank-based diagnostics such as SBC start from the \emph{rank-test samples}
+%
+\begin{equation}
+    \theta^\ast,
+    \mathbf{x},
+    \theta_1, \dots, \theta_L
+    \sim 
+    p(\theta^\ast)\,
+    p(\mathbf{x} \mid \theta^\ast)\,
+    \prod_{i=1}^L
+    q_{\phi}(\theta_i \mid \mathbf{x}) 
+    \;.
+    \label{eqn:rank_test_samples}
+\end{equation}
+%
+In words: draw a parameter from the prior, $\theta^\ast \sim p(\theta)$, generate an observation $\bx \sim p(\bx \mid \theta^\ast)$, and then draw $L$ samples from the learned posterior $q_\phi(\theta \mid \bx)$. By Bayes’ theorem, this is equivalent to first sampling $\bx \sim p(\bx)$ and then $\theta^\ast \sim p(\theta \mid \bx)$, followed by the same posterior draws.
+
+To compare $\theta^\ast$ with the posterior samples, we define the (normalised) \emph{rank} of $\theta^\ast$ within $\{ \theta_1, \dots, \theta_L \}$ as
+%
+\begin{equation}
+    F(\theta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1}
+    \big(\theta_i \leq \theta^\ast\big)\;,
+\end{equation}
+%
+so that $F(\theta^\ast)$ can only take values in $\{0, 1/L, 2/L, \dots, 1\}$. We can then define the probability that the rank, averaged over rank-test samples from Eq.~\eqref{eqn:rank_test_samples}, takes a particular value $k/L$:
+%
+\[
+\mathbb{P}\!\left(F(\theta^\ast)=\tfrac{k}{L}\right)
+= 
+\mathbb{E}_{\substack{
+\theta^\ast \sim p(\theta),\; 
+\bx \sim p(\bx \mid \theta^\ast),\\[2pt]
+\theta_{1:L} \sim \prod_{i=1}^L q_\phi(\theta_i \mid \bx)
+}}\!\left[
+  \mathbb{1}\!\left\{ \sum_{i=1}^L \mathbb{1}(\theta_i \leq \theta^\ast) = k \right\}
+\right].
+\]
+
+If $q_\phi(\theta \mid \bx) = p(\theta \mid \bx)$, then $\theta^\ast$ and the $\theta_i$ are i.i.d.\ from the same distribution. By exchangeability, each ordering is equally likely, and hence each of the $L+1$ possible rank positions is equally probable,
+%
+\[
+\mathbb{P}\!\left(F(\theta^\ast)=\tfrac{k}{L}\right) = \frac{1}{L+1}\;.
+\]
+This discrete uniformity is the central calibration criterion of SBC: any systematic deviation from flatness indicates a mismatch between $q_\phi$ and the true posterior.
+
+\paragraph{Continuous Limit: The Probability Integral Transform}
+In the large sample limit $L \to \infty$, the discrete rank statistic approaches a continuous uniform distribution on $[0,1]$. The limiting object is the probability integral transform (PIT),
+\begin{equation}
+F(\theta^\ast) = \int_{-\infty}^{\theta^\ast} d\theta\, q_\phi(\theta \mid \bx)\;,
+\label{eqn:PIT}
+\end{equation}
+namely, the value of the posterior CDF at the true parameter. The PIT is well known in statistics as a standard tool for checking calibration. Its advantage is that PIT-based tests provide a continuous and potentially more sensitive alternative to rank-based SBC, though this requires efficient evaluation of the integral.
+
+The central calibration criterion, whether using discrete ranks or the continuous PIT, is the same: if $q_\phi(\theta \mid \bx) = p(\theta \mid \bx)$, then
+%
+\begin{equation}
+    F(\theta^\ast) \sim \text{Uniform}(0, 1)\;.
+\end{equation}
+%
+This uniformity condition underpins both SBC and PIT-based diagnostics: deviations from flatness in the rank (or PIT) distribution directly signal miscalibration of the learned posterior.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes.png}
+    \includegraphics[width=0.49\linewidth]{figures/SBC_histograms.png}
+    \caption{Simulation-based calibration. \emph{Left panel:} Exact, shifted, overdispersed, and underdispersed inferred posteriors, $q_\phi(\theta \mid \mathbf{x})$, compared to the ground-truth posterior, $p(\theta \mid \mathbf{x})$ (gray). 
+    \emph{Right panel:} Resulting rank histogram (with $L=10$ and $N=10000$). Even small biases in the shape are detected. We assume that the type of mismodeling is uniform across different values of $\mathbf{x}$.}
+    \label{fig:SBC_basics}
+\end{figure}
+
+
+\subsubsection{Interpreting SBC Rank Histograms}
+
+In practice, SBC is a simple but powerful baseline check for posterior calibration, and it is a natural starting point before turning to more elaborate diagnostics. Its usefulness becomes clear once we look at how different types of miscalibration leave distinct and easily recognizable signatures in the rank histogram.
+
+In Fig.~\ref{fig:SBC_basics}, we illustrate how bias and miscalibration appear in practice.\footnote{We assume a uniform prior, \( \theta \sim \text{Uniform}(-1, 1) \), and Gaussian measurement noise, \( x \sim \text{Normal}(\theta, \sigma^2) \) with \( \sigma = 0.1 \). The inferred posterior is modeled as \( q_\phi(\theta \mid x) = \text{Normal}(\theta; x + b, s \sigma^2) \), where \( b \neq 0 \) introduces a location bias and \( s \neq 1 \) scales the posterior variance. Underdispersion (overconfidence) corresponds to \( s < 1 \), and overdispersion (conservativeness) to \( s > 1 \).} The left panel compares the true posterior \( p(\theta \mid \bx) \) with biased and miscalibrated approximations, while the right panel shows the resulting rank histograms \( F(\theta^\ast) \), computed from \( L = 30 \) posterior samples per simulation across \( N = 1000 \) simulations.
+
+The patterns revealed in Fig.~\ref{fig:SBC_basics} are characteristic:
+\begin{itemize}
+    \item \textbf{Bias} (shifted posteriors) manifests as skewed histograms;
+    \item \textbf{Overdispersion} (too wide posteriors) leads to inverse U-shapes;
+    \item \textbf{Underdispersion} (too narrow posteriors) gives U-shapes.
+\end{itemize}
+Even mild miscalibration leaves a visible trace. All of these departures can be read as deviations from the flat, uniform rank distribution, which makes SBC a practical and sensitive tool for diagnosing type~C epistemic uncertainty, even when the true posterior is not directly accessible.
+
+\begin{figure}[th]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes_nonuniform.png}
+    \includegraphics[width=0.49\linewidth]{figures/SBC_histogram_nonuniform.png}
+    \caption{If deviations between the inferred posterior \( q_\phi(\theta \mid \bx) \) and the ground truth \( p(\theta \mid \bx) \) vary with the observation \( \bx \), they can partially cancel out in the overall SBC histogram. \emph{Left panel:} Comparison of a uniform (i.e., \( \bx \)-independent) bias with a non-uniform bias that changes across data space. \emph{Right panel:} The rank histogram for the non-uniform case appears nearly uniform when aggregated over all \( \bx \), but stratifying by data subsets reveals the underlying miscalibration.}
+    \label{fig:SBC_non_uniform_bias}
+\end{figure}
+
+\begin{figure}[th]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes_suboptimal.png}
+    \includegraphics[width=0.49\linewidth]{figures/SBC_histogram_suboptimal.png}
+    \caption{SBC and HPDR coverage tests are sensitive to overdispersion but largely insensitive to posteriors based on suboptimal data compression. Shown are two scenarios: an overdispersed posterior \( q_\phi(\theta \mid \bx) \propto p(\theta \mid \bx)^{1/2} \), and a calibrated but suboptimal posterior \( q_\phi(\theta \mid \bx) = p(\theta \mid T(\bx)) \) based on a lossy summary. Both are broader than the ground truth, but for different reasons: the overdispersed posterior overestimates uncertainty, while the suboptimal one correctly reflects additional variation due to limited information.}
+    \label{fig:SBC_insufficiency}
+\end{figure}
+
+
+\subsubsection{Insensitivity to Spatially Varying Bias} 
+
+SBC evaluates calibration averaged over the data distribution, \( \bx \sim p(\bx) \), which means it can miss \emph{spatially varying} miscalibration. This averaging is both its strength and its weakness.  If systematic deviations change across data space—say, a bias that flips sign depending on \( \bx \)—then these effects can cancel in the aggregate rank histogram (see~\citep{modrak_simulation-based_2025} for a detailed discussion).  The result may look flat, even though calibration is clearly violated in particular regions of \( \bx \)-space.  Figure~\ref{fig:SBC_non_uniform_bias} shows such a case: the global histogram is nearly uniform, but once we inspect different regions of data space separately, the underlying miscalibration becomes obvious. 
+
+The lesson is that standard SBC can miss local structure.  A natural extension is to stratify the analysis, computing rank histograms for subsets of \( \bx \).  This uncovers biases that are hidden in the global test, but requires generally more samples. The tradeoff is between detecting local miscalibration and maintaining statistical power in each subset.
+
+
+\subsubsection{Insensitivity to Information Loss} 
+\label{sec:diag:forward_back:sbc:information}
+
+If the learned posterior is affected by pure type~B uncertainties \emph{only}, it can always be written as \( q_\phi(\theta \mid \bx) = p(\theta \mid T(\bx)) \), for some suitable (and lossy) data summary \( \bt = T(\bx) \). Although information loss leads in general to wider posteriors, this effect is distinct from overdispersion, which systematically inflates uncertainty around the correct location, producing posteriors that are too wide relative to the available information.
+
+Figure~\ref{fig:SBC_insufficiency} illustrates this distinction. Both posteriors shown are broader than the ground truth, but only the overdispersed one leaves a clear SBC signature. The overdispersed posterior systematically exaggerates uncertainty but is mostly centered correctly, which produces the inverse U-shape familiar from above. On the other hand, posteriors based on an insufficient summary are both broader \emph{and} more variable in location across simulations in a self-consistent way. The resulting random shifts lead to a histogram that remains flat.
+
+Let us formally study the effect of lossy summaries on the rank test samples. Under the SBC sampling scheme, Eq.~\eqref{eqn:rank_test_samples}, we have
+\begin{equation}
+    \theta^\ast \sim p(\theta), \quad 
+    \bx \sim p(\bx \mid \theta^\ast), \quad 
+    \theta_{1:L} \sim q_\phi(\btheta \mid \bx) = p(\btheta \mid \bt = T(\bx)) \, .
+\end{equation}
+The samples of \( \theta^\ast \) and \( \theta_{1:L} \) are then used to calculate the rank \( F(\theta^\ast) \). This rank does not directly depend on the simulated data \( \bx \), and the samples \( \theta_{1:L} \) only depend on \( \bx \) through the lossy summary \( T(\bx) \). The rank distribution will hence be the same if we replace the rank test samples with
+\begin{equation}
+\theta^\ast \sim p(\theta), \quad 
+\bt \sim p(\bt \mid \theta^\ast), \quad 
+\theta_{1:L} \sim p(\btheta \mid \bt) \, .
+\end{equation}
+Here, we formally replace data samples with summary samples. If we now apply Bayes' theorem to the \( (\theta^\ast, \bt) \) sample pairs, we arrive at
+\begin{equation}
+\bt \sim p(\bt),
+\quad 
+\theta^\ast \sim p(\theta \mid \bt),
+\quad 
+\theta_{1:L} \sim p(\btheta \mid \bt) \, .
+\end{equation}
+We see that \( \theta^\ast \) and \( \theta_{1:L} \) are independent and identically distributed, resulting in a flat SBC rank distribution.
+
+This reveals a core limitation of SBC and many other rank-based diagnostics: SBC is completely insensitive to type~B epistemic uncertainty (information loss), while remaining a necessary—but not sufficient—test for type~C (inference error).
+
+
+\subsubsection{Beyond Marginals: Testing the Joint Posterior}
+
+So far we have considered SBC in one dimension, or applied separately to each component of a parameter vector \( \btheta = (\theta_1,\dots,\theta_N) \). The latter is a straightforward extension: given rank test samples \( (\btheta^\ast, \bx, \btheta_{1:L}) \) drawn from Eq.~\eqref{eqn:rank_test_samples}, one can obtain samples for any single parameter component simply by \emph{implicit marginalization}—that is, by omitting the other coordinates. This effectively yields samples \( \theta_i^\ast,\;\bx,\; \theta_{i,1:L} \sim q_\phi(\theta_i \mid \bx) \), with the marginal posterior defined as
+\[
+q_\phi(\theta_i \mid \bx) = \int d\theta_1 \cdots d\theta_{i-1}\, d\theta_{i+1}\cdots d\theta_N \, q_\phi(\btheta \mid \bx)\;.
+\]
+Let us assume we were able to show that \( p(\theta_i \mid \bx) = q_\phi(\theta_i \mid \bx) \) for all \( i=1, \dots, N \).\footnote{As discussed above, this cannot be guaranteed with SBC, because of insensitivities towards spatially varying bias and lossy summaries. But we focus here on an idealized scenario for the sake of the argument.} A natural question is whether this suffices to guarantee that the full joint posterior is correct, \( p(\btheta \mid \bx) \;\stackrel{?}{=}\; q_\phi(\btheta \mid \bx) \). The answer, however, is no—testing coordinates one-by-one only probes the marginals, and leaves the dependence structure between parameters untouched.
+
+Interestingly, classical probability theory arguments open a path towards completeness. By the Cramér--Wold theorem~\cite{xxx}, a multivariate distribution is uniquely determined by the set of all its one-dimensional projections. Concretely, if one can show that
+\[
+q_\phi(\bw^\top \btheta \mid \bx) = p(\bw^\top \btheta \mid \bx) \quad \text{for all } \bw \in \mathbb{R}^N ,
+\] 
+then it follows that \( q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx) \). Confirming equality between learned and true posterior for all possible one-dimensional projections implies equality for the high-dimensional distributions.
+
+Of course, checking all possible projections is infeasible in practice. Nevertheless, running SBC on a sufficiently rich set of random or carefully chosen projections is computationally cheap, and can greatly enhance the sensitivity of the SBC probe. Used this way, SBC remains an effective and versatile tool even in higher-dimensional settings—provided that other pitfalls, such as insufficient summaries or non-uniform bias, are kept under control.
+
+
+\subsection{Posterior Coverage Diagnostics}
+\label{sec:diag:forward_back:coverage}
+
+Credible regions are a common way to visualise and interpret posterior density distributions. For a given observation $\bx_{\mathrm{obs}}$, a credible region $\mathcal{C}_{1-\alpha}(\bxobs)$ is a subset of the parameter space that contains a specific fraction of the posterior mass.  Examples include the central $68\%$ or $95\%$ intervals, or the highest posterior density regions, but many different construction schemes exist. These regions admit a natural Frequentist perspective: over repeated draws from the generative model $(\bx, \btheta^\ast) \sim p(\bx, \btheta)$, the true parameter should fall inside a nominal $1-\alpha$-credible interval exactly with frequency $1-\alpha$ (see \cite{dawid_well-calibrated_1982} for an early discussion).
+
+Posterior coverage diagnostics turn this expectation into a consistency test.  They ask whether the credible intervals computed from the learned posterior $q_\phi(\btheta \mid \bx)$ actually contain---or \emph{cover}---the true parameters with the indicated frequency under the data--generating process.  In other words, they evaluate whether nominal coverage matches empirical coverage. 
+
+Although the logic appears to be different from rank-based SBC, the technical machinery is closely related: coverage tests can be expressed in terms of the same rank-test samples introduced above, but applied to sets rather than individual scalar comparisons.  And, as is typical for forward-backward diagnostics, they are defined in expectation over $\bx$.
+
+
+\subsubsection{Defining Expected Posterior Coverage}
+
+Given the learned posterior $q_\phi(\btheta \mid \bx_{\mathrm{obs}})$ for some observation $\bx_{\mathrm{obs}}$, the highest posterior density region (HPDR) with nominal credibility \(1 - \alpha\) is defined as
+%
+\begin{equation}
+    \label{eqn:HPDR}
+    \mathcal C_{1-\alpha}(\bx) \equiv \{\btheta \in \Theta \mid q_\phi(\btheta \mid \bx) \geq \gamma_{1-\alpha} \}\;,
+\end{equation}
+%
+where the threshold \( \gamma_{1-\alpha} \) is chosen such that
+%
+\begin{equation}
+    \label{eqn:one_minus_alpha}
+    \int_{\mathcal C_{1-\alpha}(\bx)} d\btheta\, q_\phi(\btheta \mid \bx) = 1 - \alpha\;.
+\end{equation}
+%
+Equivalently, $\mathcal C_{1-\alpha}(\bx)$ is the super-level set of $q_\phi(\btheta \mid \bx)$ at threshold $\gamma_{1-\alpha}$, i.e.\ the region bounded by the posterior contour that encloses $1-\alpha$ of its mass. Thus, HPDRs form a nested family of regions, expanding monotonically as the nominal credibility increases. As we will see, this nesting property is convenient for diagnostics, since it allows coverage to be assessed consistently using rank statistic methods.
+
+\medskip
+
+If \( q_\phi(\btheta \mid \bx) \) matches the true posterior \( p(\btheta \mid \bx) \), then a fraction \(1 - \alpha\) of samples from \( p(\btheta \mid \bx) \) should fall within \( \mathcal C_{1-\alpha}(\bx) \).   When \( q_\phi(\btheta \mid \bx) \) is overdispersed (underdispersed), this fraction will tend to be higher (lower) than \(1 - \alpha\).   This motivates the definition of the \emph{realized coverage},
+%
+\begin{equation}
+    1 - \tilde\alpha(\bx) \equiv
+    \mathbb{E}_{p(\btheta^\ast \mid \bx)}
+    \left[\mathbb{1}\!\left(\btheta^\ast \in 
+    \mathcal C_{1-\alpha}(\bx)
+    \right)\right]
+    = \int_{\mathcal C_{1-\alpha}(\bx)} d\btheta\, p(\btheta \mid \bx)\;.
+\end{equation}
+%
+Since \( \mathcal C_{1-\alpha}(\bx) \) is constructed from \( q_\phi(\btheta \mid \bx) \), this quantity measures how well the nominal region $\mathcal{C}_{1-\alpha}(\bx)$ captures mass under the true posterior $p(\btheta \mid \bx)$.   The central diagnostic question is then whether \(1 - \tilde \alpha(\bx)\) matches the nominal level \(1 - \alpha\).
+
+\medskip
+
+However, in the spirit of forward--backward tests, we cannot usually compute realized coverage for a fixed observation $\bx$, since this would require samples from the intractable true posterior $p(\btheta \mid \bx)$.   Instead, we draw joint samples from the generative model, \( (\bx, \btheta^\ast) \sim p(\bx, \btheta) = p(\bx \mid \btheta)\, p(\btheta) \).   For each such pair, we construct \( \mathcal C_{1-\alpha}(\bx) \) and check whether the true parameter \( \btheta^\ast \) lies inside it.   This construction is practical, but evaluates \emph{average} coverage over \( \bx \sim p(\bx) \), rather than conditioning on a specific observation.   The resulting \emph{expected realized coverage} is formally given by
+%
+\begin{equation}
+    1 - \tilde\alpha \equiv \bbE_{p(\bx)}
+    [1 - \tilde\alpha(\bx)] = 
+    \bbE_{p(\bx, \btheta)}
+    \left[\mathbb{1}\left(
+    \btheta \in 
+    \mathcal C_{1-\alpha}(\bx)
+    \right)\right]\;.
+    \label{eqn:expected_realized_coverage}
+\end{equation}
+%
+If \( 1 - \tilde\alpha \) agrees with the nominal level \( 1 - \alpha \), we can conclude that the learned posterior exhibits correct coverage \emph{on average}. This connection is typically visualized by plotting the realized coverage \( 1 - \tilde\alpha \) as a function of the nominal credibility \( 1 - \alpha \); such coverage plots are often referred to as \emph{pp-plots} in the literature.
+
+
+\paragraph{An equivalent formulation for Monte Carlo estimation}
+The definition in Eq.~\eqref{eqn:expected_realized_coverage} is the canonical one, expressed directly in terms of HPDRs.   For Monte Carlo estimation it is, however, convenient to use an equivalent  formulation. This relies on the statistic
+%
+\begin{equation}
+    F_{\bx}(\btheta^\ast) = \int d\btheta\, q_\phi(\btheta\mid \bx) 
+    \,\mathbb 1\!\left(
+    q_\phi(\btheta \mid \bx) \geq
+    q_\phi(\btheta^\ast\mid \bx)
+    \right)\;,
+    \label{eqn:F_statistic_q}
+\end{equation}
+%
+which measures the posterior mass contained in the super-level set of  $q_\phi(\btheta \mid \bx)$ at density $q_\phi(\btheta^\ast \mid \bx)$.   Put differently, $F_{\bx}(\btheta^\ast)$ is the posterior credibility level of the contour  passing through $\btheta^\ast$.  
+
+With this definition, the expected realized coverage can be written as
+%
+\begin{equation}
+    1 - \tilde\alpha = 
+    \bbE_{p(\bx, \btheta)} \left[ 
+    \mathbb{1}\!\left(F_{\bx}(\btheta) \leq 1 - \alpha\right) 
+    \right]\;,
+    \label{eqn:F_coverage_test}
+\end{equation}
+%
+which is equivalent to Eq.~\eqref{eqn:expected_realized_coverage}.
+Its main advantages are that it avoids the explicit construction of HPDRs and  directly links to Monte Carlo estimators based on rank statistics, which we will  use below to diagnose posterior coverage in practice.
+
+
+\subsubsection{Monte Carlo Estimation via Rank-Test Samples}
+
+Constructing the \emph{exact} HPDR $\mathcal{C}_{1-\alpha}(\bx)$ for a given observation $\bx$ and level $1-\alpha$ is computationally challenging. Instead, one can adopt a Monte Carlo approximation scheme based on rank-test samples, similar to Eq.~\eqref{eqn:rank_test_samples} above.
+
+We begin by generating \( N \) rank-test samples,
+%
+\begin{equation}
+\label{eqn:rank_test_samples_multi}
+    \boldsymbol{\theta}^\ast,
+    \mathbf{x},
+    \boldsymbol{\theta}_{1:L}
+    \sim 
+    p(\boldsymbol{\theta}^\ast)
+    p(\mathbf{x} \mid \boldsymbol{\theta}^\ast)
+    \prod_{i=1}^L
+    q_{\phi}(\boldsymbol{\theta}_i \mid \mathbf{x}) 
+    \;,
+\end{equation}
+%
+where \( \boldsymbol{\theta}^\ast \sim p(\boldsymbol{\theta}) \), \( \mathbf{x} \sim p(\mathbf{x} \mid \boldsymbol{\theta}^\ast) \), and \( \boldsymbol{\theta}_i \sim q_\phi(\boldsymbol{\theta} \mid \mathbf{x}) \). As in SBC, this sampling structure is equivalent to drawing \( \bx \sim p(\bx) \), then \( \btheta \sim p(\btheta \mid \bx) \), due to Bayes’ theorem.
+%
+We can now use the rank-test samples to calculate the (normalised) rank of the true parameter $\btheta^\ast$ within the learned posterior samples $\btheta_{1:L}$,
+%
+\begin{equation}
+    F_\bx(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1}
+    \left(q_\phi(\btheta_i \mid \bx) \geq q_\phi(\btheta^\ast \mid \bx)\right)
+    \;.
+    \label{eqn:HPDI_ranks}
+\end{equation}
+%
+The main difference w.r.t.~SBC above is that we here use the learned posterior density itself as ordering principle.  Importantly, Eq.~\eqref{eqn:HPDI_ranks} provides a Monte Carlo estimate for the statistic in Eq.~\eqref{eqn:F_statistic_q}.  
+
+Together with Eq.~\eqref{eqn:F_coverage_test}, the average expected coverage for HPDR with nominal coverage $1-\alpha$ can be estimated as
+%
+\begin{equation}
+    1-\tilde \alpha = 
+    \mathbb{E}_{\substack{
+        \btheta^\ast \sim p(\btheta),\; 
+        \bx \sim p(\bx \mid \btheta^\ast),\\[2pt]
+        \btheta_{1:L} \sim \prod_{i=1}^L q_\phi(\btheta_i \mid \bx)
+    }}\!\left[
+    \mathbb{1}\!\left\{ \frac1L\sum_{i=1}^L \mathbb{1}(
+    q_\phi(\btheta_i\mid \bx) \geq q_\phi(\btheta^\ast\mid \bx)) \leq 1-\alpha \right\}
+    \right]\;.
+\end{equation}
+%
+This expression looks somewhat cumbersome, but provides a precise and straightforward to implement prescription for Monte Carlo estimation.
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/cov_shapes.png}
+    \includegraphics[width=0.49\linewidth]{figures/cov_pp.png}
+    \caption{Expected HPDI coverage for inferred posteriors with different systematics. \emph{Left:} Inferred posteriors \( q_\phi(\theta \mid \bx) \) compared to the ground truth \( p(\theta \mid \bx) \), assuming deviations are independent of \( \bx \). \emph{Right:} \( pp \)-plot of realized vs nominal coverage. Over- and underdispersed posteriors lead to systematic over- or undercoverage. Compared to SBC, the test is less sensitive to posterior bias.}
+    \label{fig:hpdi_cov}
+\end{figure}
+
+
+\subsubsection{Interpreting Coverage Diagnostics}
+
+Figure~\ref{fig:hpdi_cov} illustrates how biased, overdispersed, and underdispersed posteriors manifest in a coverage plot (or \emph{pp-plot}) comparing realized with nominal coverage. A few typical observations can be made:
+\begin{itemize}
+    \item \textbf{Bias} (shifted posteriors) lowers realized coverage with respect to nominal coverage, and leads typically to overconfident regions.
+    \item \textbf{Overdispersion} (too wide posteriors) leads to underconfident regions, i.e., higher realized coverage than nominally expected.
+    \item \textbf{Underdispersion} (too narrow posteriors) lowers realized coverage and leads to overconfident regions.
+\end{itemize}
+Notably, even strongly biased posteriors produce only mild deviations---whereas the same bias would yield a pronounced signal in SBC diagnostics (see Fig.~\ref{fig:SBC_basics} for comparison).\cw{TODO: Check if the plot is correct?]}
+
+\medskip
+
+Note that standard coverage plots emphasize the behaviour of regions with credibility in the range \(0.2 \lesssim 1-\alpha \lesssim 0.8\), whereas behaviour for higher credibility is compressed to the upper right corner of the plot. Yet, the most practically relevant values of \( \alpha \) are typically small—for instance, \( \alpha = 0.05 \) for a 95\% credible region. To better visualize miscalibration in these regimes, it is helpful to transform the credibility values \(1-\alpha\) to the corresponding \emph{z-scores}, \(z_{1-\alpha}\).\footnote{We define \(z_{1-\alpha}\) as the standard normal quantile such that the central interval \([-z_{1-\alpha}, z_{1-\alpha}]\) contains probability mass \(1-\alpha\). Equivalently, \(z_{1-\alpha} = \Phi^{-1}(1-\tfrac{\alpha}{2})\), where \(\Phi^{-1}(\cdot)\) is the inverse cumulative distribution function of the standard normal distribution.}
+For example, a 95\% credible interval corresponds to \( z \approx 1.96 \), and a 99.7\% interval to \( z \approx 3 \). Plotting realized \( \tilde z \) against nominal \( z \) better highlights tail miscalibration, where under- or overcoverage may be particularly consequential.
+
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/cov_shape_blind.png}
+    \includegraphics[width=0.49\linewidth]{figures/cov_pp_blind.png}
+    \caption{Examples of inferred posteriors \( q(\theta \mid \bx) \) that are specifically constructed to match the HPDI coverage of the true posterior \( p(\theta \mid \bx) \), despite visibly differing in shape and location. This illustrates a blind spot of HPDI-based diagnostics: they test only the posterior mass within super-level sets of \( q \), and are thus insensitive to mass redistribution along contour surfaces. The deviations shown here would be readily detected by SBC.}
+    \label{fig:blind_cov}
+\end{figure}
+
+
+\subsubsection{Insensitivity to Posterior Shape Distortions}
+
+The insensitivities of SBC apply to coverage diagnostics as well: HPDR coverage plots are completely insensitive to type~B (information loss) uncertainties; type~C (inference error) uncertainties can potentially cancel in the coverage plot due to averaging across the data space (for instance when some regions feature overdispersed and others underdispersed learned posteriors). However, HPDR-based coverage diagnostics also introduce a \emph{new}, arguably more subtle failure mode.
+
+\paragraph{A new failure mode: shape distortions}
+
+HPDR coverage tests evaluate whether intervals \(\mathcal{C}_{1-\alpha}(\bx)\) derived from the learned posterior contain the correct amount of mass under the true posterior \(p(\btheta \mid \bx)\). This requirement, however, does not automatically imply that the \emph{shape} of the interval corresponds correctly to the shape implied by the true posterior. In fact, a wide range of intervals can be constructed that satisfy the integral constraints while featuring incorrect shapes.
+
+Figure~\ref{fig:blind_cov} illustrates this limitation with three pathological approximate posteriors that deviate markedly from the ground truth. Despite being obviously misshapen, each one yields a perfectly diagonal coverage plot. This is not accidental: these posteriors are constructed such that the posterior mass within every symmetric HPDR interval matches that of the true posterior, ensuring perfect coverage.\footnote{For the example, we choose a biased center \( \theta_0 \) and define \( s(\theta) = -|\theta - \theta_0| \) as the ordering statistic. The super-level sets \( I(w) = \{ \theta : |\theta - \theta_0| \leq w \} \) define symmetric intervals. Let \( M(w) = \int_{I(w)} p(\theta)\, d\theta \) be the true posterior mass within the interval. We then construct a density \( q(\theta) = g(|\theta - \theta_0|) \) such that \( g(w) = \tfrac{1}{2} M'(w) \), and normalize. This procedure ensures that all HPDR intervals under \( q \) match those under \( p \) by construction.}
+
+\paragraph{Mitigation strategies} 
+
+This example underscores an additional insensitivity of credible region coverage tests that is not present in SBC: coverage tests based on credible regions are invariant to a wide range of shape mismatches. Despite visual mismatches or implausible shapes, such distortions may remain entirely undetected by standard coverage diagnostics. Importantly, the blind directions depend on how credible regions are constructed. A mitigation strategy is therefore to combine multiple approaches—HPDR, central regions, upper and lower limits, as well as SBC tests—to achieve more comprehensive diagnostic coverage.
+
+
+\subsection{Classifier Two-Sample Test (C2ST)}
+\label{sec:diag:forward_back:c2st}
+
+A natural strategy for forward-backward diagnostic tests is to train a neural classifier to distinguish samples from the forward model and samples from the backward model. If the classifier performs better than random, this provides clear evidence for a mismatch between the learned posterior and the true posterior.
+
+The strategy is to train a classifier to distinguish between samples drawn from the inverse model \( q_\phi(\btheta \mid \bx)p(\bx) \) (labeled 1) and those drawn from the generative model \( p(\bx \mid \btheta)p(\btheta) \) (labeled 0). Classifier training is done analogously to NRE, see Sec.~\ref{sec:methods:ratios:nre}. The trained classifier, \(d_\phi(\btheta, \bx)\), provides the probability that a parameter-data pair \((\btheta, \bx)\) has been drawn from the backward model. A typical strategy is to define it in terms of a scalar network \(f_\phi\), as \(d_\phi(\btheta, \bx) = \sigma(f_\phi(\btheta, \bx))\). If the classifier is Bayes optimal, the scalar function approximates the log posterior ratio,
+%
+\begin{equation}
+f_\phi(\btheta, \bx) \approx \log 
+\frac{q_\phi(\btheta \mid \bx)p(\bx)}{p(\btheta, \bx)}
+= \log\frac{q_\phi(\btheta \mid \bx)}{p(\btheta \mid \bx)}
+\;.
+\end{equation}
+%
+In situations where the learned posterior agrees exactly with the true one, the expected network output is zero, \(f_\phi(\btheta, \bx) \simeq 0\), and hence \(d_\phi(\btheta, \bx) \simeq \tfrac{1}{2}\). Deviations from these values could indicate posterior mismatches. In practice, because of finite training data and network capacity, deviations are always expected, and one has to carefully assess the their significance. We will here discuss different common strategies to quantify observed mismatches.
+
+
+\subsubsection{ROC-Based Evaluation}
+
+A common diagnostic approach in this context is the \emph{receiver operating characteristic} (ROC) curve. It is defined by plotting the true positive rate (TPR) against the false positive rate (FPR) for varying thresholds \( t \) on the classifier output:
+\begin{align*}
+\text{TPR}(t) &= \mathbb{E}_{\bx, \btheta \sim q_\phi(\btheta \mid \bx)p(\bx)} 
+[\mathbb{1}(d_\phi(\btheta, \bx) > t)], \\
+\text{FPR}(t) &= \mathbb{E}_{\bx, \btheta \sim p(\bx, \btheta)} 
+[\mathbb{1}(d_\phi(\btheta, \bx) > t)], \\
+\text{ROC} &= \{ (\text{FPR}(t), \text{TPR}(t)) : t \in \mathbb{R}\},
+\end{align*}
+where \( d_\phi(\btheta, \bx) = \sigma(f_\phi(\btheta, \bx)) \) denotes the classifier output.
+If the two distributions are indistinguishable, the ROC curve lies along the diagonal, i.e.\ \( \text{TPR}(t) \approx \text{FPR}(t) \) for all \( t \). Deviations from the diagonal indicate that the classifier can distinguish between the two sample sets, and hence that the learned posterior \( q_\phi \) deviates from the true posterior \( p \).
+
+A commonly used summary of the ROC curve is the \emph{area under the curve} (AUC). The AUC can be interpreted as the probability that the classifier assigns a higher score to a sample from \( q_\phi(\btheta \mid \bx)p(\bx) \) than to one from \( p(\bx, \btheta) \): 
+\begin{equation}
+\label{eqn:AUC}
+\text{AUC} = \mathbb{E}_{q_\phi(\btheta\mid \bx)p(\bx, \btheta^\ast)}
+\left[\mathbb{1}(f_\phi(\btheta^\ast, \bx) < f_\phi(\btheta, \bx))\right]\;.
+\end{equation}
+When \(q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx)\), the expected value of the AUC is \emph{exactly} \( \tfrac{1}{2} \). It increases toward 1 as the distributions become more separable. Any statistically significant deviation from \(\tfrac{1}{2}\) (with respect to Monte Carlo noise) indicates a mismatch between the learned and true posterior.
+
+For Bayes optimal classifiers, one can show that the AUC is directly related to the total variation (TV) distance that we discussed in Sec.~\ref{sec:diag:reference:divergences},
+\begin{equation}
+\text{AUC} 
+\xrightarrow{\text{Bayes opt}}
+\frac{1}{2} + \frac{1}{2} \, \mathbb{E}_{p(\bx)} \left[D_\text{TV}(q_\phi(\btheta\mid \bx) \| p(\btheta \mid \bx))\right]\;.
+\end{equation}
+The AUC is connected to the \emph{data-averaged} total variation divergence between the true and the learned posterior. Since the integrand is strictly non-negative, \(\text{TV} = 0\) (or equivalently \(\text{AUC} = \tfrac{1}{2}\)) would imply that \(q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx)\) exactly.
+
+
+\subsubsection{Connection to Rank-Based Tests}
+
+Although the C2ST is usually not conceived as a rank-based test, there are clear connections. In fact, the AUC in Eq.~\eqref{eqn:AUC} can be interpreted as a rank-based test: we compare samples from the forward model \((\btheta^\ast, \bx)\) with a single sample from the learned posterior \(\btheta'\), effectively using \(L=1\) with \(f_\phi(\btheta, \bx)\) as the ordering function, similarly to Eq.~\eqref{eqn:HPDI_ranks} for HPDR-based coverage estimation.
+
+Based on this logic, and on the rank-test samples from Eq.~\eqref{eqn:rank_test_samples_multi}, one can define an \(L>1\) generalization of the AUC, which gives the normalized rank statistic
+%
+\begin{equation}
+    F_\bx(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1}
+    \left(f_\phi(\btheta_i, \bx) \geq f_\phi(\btheta^\ast, \bx)\right)
+    \;.
+    \label{eqn:C2ST_ranks}
+\end{equation}
+Any statistically significant deviation from uniformity would indicate a mismatch between learned and true posterior. Note that this test is robust against potential approximation errors in \(f_\phi\) itself, since \(f_\phi\) only acts here as an ordering function for comparing forward with backward samples, and does not quantify the difference by itself.
+
+Put differently, this approach allows us to first optimize an ordering function \(f_\phi \) to pick up critical regions of learned vs.\ true posterior mismatch, and then quantify that mismatch through a rank-based test.
+
+
+\paragraph{Insensitivity to information loss}
+
+Just like SBC in Sec.~\ref{sec:diag:forward_back:sbc} and coverage diagnostics in Sec.~\ref{sec:diag:forward_back:coverage}, C2ST diagnostics may be insensitive to information loss in the learned posterior.  Whether or not this happens depends on how much information the learned classifier is able to extract from the data.
+
+Consider the case where the learned posterior is based on a lossy summary, \(q_\phi(\btheta \mid \bx) = p(\btheta \mid T(\bx))\), and the classifier similarly extracts only limited information from \(\bx\) through some implicit summary \(U(\bx)\), such that \(f_\phi(\btheta, \bx) = g(\btheta, U(\bx))\). If the summaries form a Markov chain \(\bx \to T(\bx) \to U(\bx)\), meaning \(U\) discards at least as much information as \(T\), then the C2ST will fail to detect the information loss in \(q_\phi\). In short, whether C2ST detects lossy summaries depends on whether the classifier \(f_\phi\) can extract more information from \(\bx\) than the approximate posterior \(q_\phi\) does.
+
+
+\subsubsection{Beyond Forward-Backward: Local Divergence Estimates}
+
+Besides ROC-based and rank-based tests, the trained classifier $f_\phi(\btheta, \bx)$ can also serve as input to divergence estimates, as they were discussed above in Sec.~\ref{sec:diag:reference:divergences}.  This approach does not rely on rank test samples, but it is sufficient to have samples from the learned posterior only.  For instance, the $\chi^2$-divergence can be estimated for a given observation $\bxobs$~\citep{linhart_l-c2st_2023}
+%
+\begin{equation}
+    D_{\chi^2}[q_\phi(\btheta \mid \bxobs) \mid\mid p(\btheta \mid \bxobs)] = \mathbb E_{q_\phi(\btheta \mid \bxobs)}
+    \left[(1-e^{-f_\phi(\btheta; \bxobs)})^2\right]
+\end{equation}
+%
+Similar expressions can be readily derived from the divergences in Tab.~\ref{tab:divergences}.  An advantage of the test is that it is local for a specific value of $\bxobs$.  A challenge is that even if $q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx)$, approximation errors in the trained classifier can lead to deviations from zero.  In order to estimate the significance of non-zero values, one hence resort to Monte Carlo methods to estimate the null distribution of $D_\chi^2$, for instance by using training data with scrambled 0, 1 labels as suggested in~\cite{linhart_l-c2st_2023}.
+
+
+\subsection{Model-Based Rank Diagnostics}
+\label{sec:diag:forward_back:model_based}
+
+So far we have discussed rank-based diagnostics using model parameters or learned quantities as ordering functions.  However, in some situations we might be able to use components of the simulation model itself. In fact, often simulation codes are implemented such that they allow to efficiently evaluate the likelihood density \( p(\bx \mid \btheta) \), or---through auto-differentiation---the score function \( \bs(\btheta; \bx) \equiv \nabla_{\btheta} \log p(\bx \mid \btheta) \). In situations where the true likelihood function is not tractable, even simplified analytic likelihoods would be a valid starting point for what we discuss here.
+
+Since the likelihood density function encodes all information about how data and parameters are connected, it is natural that it should also serve as a useful ingredient for calibration diagnostics.  Moreover, since the likelihood depends directly on the full data \(\bx\) rather than on any learned summary, this approach offers a strategy for detecting type~B (information loss) uncertainties~\citep{modrak_simulation-based_2025}, which is a failure mode most other forward-backward tests remain insensitive to. 
+
+
+\subsubsection{Rank Tests via Explicit Model Evaluation}
+
+Once we have access to the likelihood density or score function of the simulation model, several powerful tests rank-based tests become possible, which we summarize briefly. All tests follow the same logic as SBC or coverage tests, they only differ in the adopted ordering function.
+
+\paragraph{Likelihood ranks}
+
+Using the (true) likelihood density $p(\bx \mid \btheta)$ as ordering function is straightforward---assuming it can be efficiently evaluated.  We generate rank test samples from Eq.~\eqref{eqn:rank_test_samples_multi} and evaluate for each sample the following normalized rank statistic: %
+%
+\begin{equation}
+    F_\bx(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1} \left(p(\bx \mid \btheta_i) \geq p(\bx \mid \btheta^\ast)\right)\;.
+\end{equation}
+%
+If the learned and true posteriors agree, we expect a uniform distribution of $F_\bx(\btheta^\ast)$, while deviations indicate a mismatch.  Note that, as for the coverage tests discussed in Sec.~\ref{sec:diag:forward_back:coverage}, the ordering function is observation dependent.  We will refer to this particular diagnostic as \emph{likelihood rank diagnostics}.  This diagnostic was introduced by~\cite{modrak_simulation-based_2025}.  
+
+
+\paragraph{True HPDR coverage} 
+
+Alternatively, if both the model likelihood density $p(\bx \mid \btheta)$ and prior $p(\btheta)$ can be evaluated, it is straightforward to use as ordering function the unnormalised posterior, $\pi(\btheta \mid \bx) \equiv p(\bx \mid \btheta) p(\btheta)$,
+%
+\begin{equation}
+    F_\bx(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1} \left(\pi(\btheta_i\mid \bx) \geq \pi(\btheta^\ast\mid \bx)\right)\;.
+\end{equation}
+Importantly, this is \emph{equivalent to ordering by the \emph{true} posterior, $p(\btheta \mid \bx)$}, since both ordering functions only differ by a data dependent constant (which leaves the ordering unchanged).  These definitions closely parallel the one in Eq.~\eqref{eqn:HPDI_ranks}, but with a crucial difference: Instead of relying on intervals defined through an learned posterior \( q_\phi(\btheta \mid \bx) \), the intervals here are based on contours of the true posterior \( p(\btheta \mid \bx) \).  
+\medskip
+
+Notably, \emph{this test actually probes the coverage of the \emph{true} highest posterior density regions}, in contrast to traditional coverage tests discussed in Sec.~\ref{sec:diag:forward_back:coverage}, which only test coverage of the learned posteriors.  This will be discussed further in Sec.~\ref{sec:diag:forward_back:general}.
+
+
+\paragraph{Score ranks}
+
+Lastly, if the (true) score function $\bs(\btheta; \bx) \equiv \nabla_{\btheta} \log p(\bx \mid \btheta)$ of the model can be evaluated, this enables a large number of additional tests.  For each components $j$ of the score function, a rank statistic can be defined
+%
+\begin{equation}
+    F^{(j)}_\bx(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L \mathbb{1} \left(
+    s_j(\bx \mid \btheta_i) \geq 
+    s_j(\bx \mid \btheta^\ast)\right)\;,
+\end{equation}
+%
+leading to as many independent tests as there are parameters. This mirrors the structure of SBC, see Sec.~\ref{sec:diag:forward_back:sbc}.  In fact, in simple situations like linear regression, where the score function becomes linear in $\btheta$, both tests are closely related.  
+
+\medskip
+
+A key advantage of the score function as an ordering function, with respect to likelihood or posterior density, is that it generally enables (similar to SBC) \emph{parameter specific tests}, whereas likelihood or true posterior rank diagnostics only provide aggregated information.
+
+
+\subsubsection{Sensitivity to Information Loss}
+
+As shown by~\cite{modrak_simulation-based_2025}, the true likelihood rank diagnostics is sensitive to type B (information loss) uncertainties. In contrast to other rank tests that we discussed above, see Sec.~\ref{sec:diag:forward_back:sbc:information}, this test can reveal inference pathologies due to lossy summaries that traditional highest-posterior density interval (HPDI) tests may completely overlook.
+
+In Fig.~\ref{fig:SBC_insufficiency_solved}, we illustrate a case in which the use of a lossy summary statistic leads to type~B uncertainty. Explicit posterior-based calibration reveals the deficiency, whereas traditional HPDI-based SBC tests remain blind to it. \cw{TODO: Update text once figure is updated}
+
+Model-based rank diagnostics is a sensitive method for testing the fidelity of learned posteriors.  However, we still expect that the above model-based rank diagnostics suffer from similar insensitiveness to spatially varying bias and shape distortions as we discussed earlier in this section. Only a combination of multiple different rank diagnostics can provide increasing certainty.
+
+\begin{figure}[th]
+    \centering
+    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes_suboptimal.png}
+    \includegraphics[width=0.49\linewidth]{figures/ELC_vs_HPDI_comparison.png}
+    \caption{HPDR coverage test compared to likelihood-based rank diagnostic. \cw{TODO: Update caption and figure}}
+    \label{fig:SBC_insufficiency_solved}
+\end{figure}
+
+
+
+% TODO: Explore other options
+%\subsubsection{Other methods}
+
+%\cw{TODO: Add discussion about other methods (TARP + Score) or remove}
+
+%\paragraph{Reference points}
+%Beyond posterior-based diagnostics, one can also construct calibration tests based on the likelihood or the score function. For example, one may define an ordering function as
+%\begin{equation}
+%\rho_\bx(\btheta) = s_i(\btheta; \bx)^k,
+%\end{equation}
+%where \( s_i(\btheta; \bx) \) is a component of the score vector, and \( k = 1, 2, 3, \dots \) is a power index that determines the sensitivity of the test. These score-based rank diagnostics offer a flexible family of calibration tools that can be tailored to specific scientific questions or model structures.
+
+
+\subsection{Generalized Rank Diagnostics}
+\label{sec:diag:forward_back:general}
+
+\begin{table}[t]
+    \centering
+    \begin{tabular}{llc>{\raggedright\arraybackslash}p{4.5cm}}
+    \toprule
+    Method & Ranks by & Type B & Ordering function $f(\btheta, \bx)$ \\
+    \midrule
+    \addlinespace[0.5em]
+    \multicolumn{4}{l}{\textit{Common rank diagnostics}} \\
+    SBC & Parameter ($d$ tests) & No & $\theta_i$ for $i=1, \dots, d$ \\
+    HPDR coverage & Learned posterior & No & $q_\phi(\btheta \mid \bx)$ \\
+    \addlinespace[1.0em]
+    \multicolumn{4}{l}{\textit{Distance and classifier-based rank diagnostics}} \\
+    TARP (x-indep) & Distance to reference & No & $\|\btheta - \btheta'\|^2$ where $\btheta' \sim p(\btheta)$ \\
+    TARP (x-dep) & Distance to reference & Maybe & $\|\btheta - \btheta_r(\bx)\|^2$\\
+    C2ST & Posterior ratio & Maybe & $f_\phi(\btheta; \bx) \approx \log  \frac{q_\phi(\btheta \mid \bx)}{p(\btheta \mid \bx)}$ \\
+    \addlinespace[1.0em]
+    \multicolumn{4}{l}{\textit{Model-based rank diagnostics --- requires tractable model}} \\
+    True HPDR & True posterior & Yes & $\pi(\btheta \mid \bx) \propto p(\bx\mid\btheta) p(\btheta)$\\
+    Likelihood ranks & Likelihood & Yes & $p(\bx \mid \btheta)$ \\
+    Score ranks & Score ($d$ tests) & Yes & $\nabla_{\theta_i}\log p(\bx \mid \btheta)$ \\
+    \bottomrule
+    \end{tabular}
+    \caption{Generalized rank diagnostics with their ordering functions $f(\btheta, \bx)$ and Type B (information loss) sensitivity.}
+    \label{tab:rank_based_test}
+\end{table}
+
+The various tests discussed in the previous sections are all examples of forward-backward diagnostics, and have as such in common that they all rely on comparing samples from the inverse mode $q_\phi(\btheta \mid \bx) p(\bx)$ with samples from the forward model $p(\bx, \btheta)$.   Importantly, most forward-backward tests can be interpreted as variants of the same underlying rank-based analysis framework.  This generalized view is starting to receive increasing attention in the literature~\citep{lemos_sampling-based_2023, modrak_simulation-based_2025}, which make it possible to better understand the role of individual rank-based test and provides a framework for comprehensive comparison of learned and true posteriors.
+
+
+\subsubsection{Framework and Methodology}
+
+General rank diagnostics follow the same structural logic as, \fex\ SBC and HPDI diagnostics, but generalize the ranking rule by supporting arbitrary ordering functions, \( f(\btheta, \bx) \).  The role of the ordering function is to provide a way to order values of $\btheta$ for rank calculation. In general, ordering functions can depend on the observation $\bx$.
+
+As before, we generate rank-test samples in Eq.~\eqref{eqn:rank_test_samples_multi}.  Then, given the ordering function \( f(\btheta, \bx) \), we compute the rank statistic
+%
+\begin{equation}
+    F_{\bx}(\btheta^\ast) = \frac{1}{L} \sum_{i=1}^L 
+    \mathbb{1} \left( f(\btheta_i, \bx) \geq f(\btheta^\ast, \bx) \right)\;.
+    \label{eqn:general_rank_statistic}
+\end{equation}
+%
+This quantifies the position of the true parameter \( \btheta^\ast \) among the posterior samples, under the ordering imposed by \( f(\btheta, \bx) \).
+%
+Under the null hypothesis that $p(\btheta \mid \bx) = q_\phi(\btheta \mid \bx)$, we expect that the rank statistic is uniformly distributed.  Significant deviations from uniformity imply a mismatch between learned and true posterior. 
+
+\paragraph{Examples} In Tab.~\ref{tab:rank_based_test}, we list the test that we discussed so far in this section, and the corresponding ordering function.  For instance, in the case of simulation-based calibration (SBC, see Sec.~\ref{sec:diag:forward_back:sbc}), the ordering function does not depend on $\bx$ and is simply given by the parameter of interest, $\theta_i$.  On the other hand, in the case of HPDI coverage tests (see Sec.~\ref{sec:diag:forward_back:coverage}), the ordering function is $\bx$ dependent and given by the learned posterior density, $q_\phi(\btheta \mid \bx)$.
+
+For completeness, we note that the ordering function supports also a stochastic component.  This was exploited for the TARP algorithm (Test of Accuracy with Random Points, \citep{lemos_sampling-based_2023}), where the ordering is given by $f(\btheta, \bx) = \| \btheta - \btheta'\|^2$, and $\btheta' \sim p(\btheta)$ is an additional contrastive parameter randomly drawn from the prior each time when sampling $\bx \sim p(\bx\mid \btheta^\ast)$.
+
+
+\subsubsection{Implications of Passing the Test}
+
+General rank diagnostics define a broad class of tests that assess whether an learned posterior $q_\phi(\btheta \mid \bx)$ assigns appropriate probability mass, as given by $p(\btheta \mid \bx)$, to a family of regions in parameter space $\Theta$ that are defined as superlevel sets of an ordering function, $f(\btheta, \bx)$.  For a given level $t\in \mathbb{R}$, the region is given by
+%
+\begin{equation}
+    \Theta_{t}(\bx) = \{ \btheta : f(\btheta, \bx) \geq t\}\;.
+\end{equation}
+%
+By construction, these regions are nested, $\Theta_t(\bx) \subseteq \Theta_{t'}(\bx)$ for $t' < t$.
+
+It is instructive to consider the large samples limit, where $L \gg 1$ and the number of rank test samples is large.  In that case, passing a given rank diagnostic test implies that
+%
+\begin{equation}
+    \bbE_{p(\bx)} 
+    \left[\int_{f(\btheta, \bx) \geq t} d\btheta\, 
+    [q_\phi(\btheta \mid \bx)  - p(\btheta \mid \bx)]
+    \right] = 0 \quad \text{for all} \quad t \in \mathbb R
+    \label{eqn:general_rank_diagnostic_result}
+\end{equation}
+%
+Different ordering functions give rise to the different tests. Examples include $f(\btheta, \bx) = q_\phi(\btheta \mid \bx)$, which tests the average mass in the HPDRs defined by the learned posterior, or $f(\btheta, \bx) = \pi(\btheta \mid \bx)$, which tests the average mass in the HPDRs of the true posterior. But the intuition provided by Eq.~\eqref{eqn:general_rank_diagnostic_result} also opens up the possibility to define new targeted tests for specific inference tasks.
+
+
+\paragraph{Completeness Guarantees}
+
+As shown in Eq.~\eqref{eqn:general_rank_diagnostic_result}, each choice of ordering function probes a specific one-dimensional projection of the learned and true posterior functions. 
+It turns out that consistency across \emph{all} possible functions $f(\btheta, \bx)$ implies global consistency.
+Indeed, \cite{lemos_sampling-based_2023} demonstrated that if \( F_{\bx}(\btheta^\ast) \) is uniformly distributed for \emph{every} choice of \( f(\btheta, \bx) \), then it implies that \( q_\phi(\btheta \mid \bx) = p(\btheta \mid \bx) \) almost everywhere. 
+
+While full coverage over all possible ordering functions is practically impossible, this highlights the fact that rank-based tests are, in principle, complete. The framework thus motivates the use of diverse, problem-specific ordering functions to uncover inference errors that might escape standard diagnostics like SBC or HPDI. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Model Misspecification Diagnostics}
+\label{sec:diag:misspec}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%\begin{quotation}
+%\noindent
+%\emph{All models are wrong, but some are useful.} — George Box
+%\cw{TODO: Check quote}
+%\end{quotation}
+
+\begin{quotation}
+    \textit{``It all looked so easy when you did it on paper — where valves never froze, gyros never drifted, and rocket motors did not blow up in your face.''}
+    
+    \hfill --- Mary F. Shafer, rocket engineer \cw{TODO: confirm}
+    
+\end{quotation}
+
+\noindent
+Simulation-based inference is built on simulation models that inevitably reflect assumptions, deliberate simplifications, limited knowledge, and inductive biases. Determining whether a model adequately describes the data, and whether scientific conclusions can be trusted or might be affected by the model's shortcomings, is central to any rigorous analysis. 
+
+Here we focus on methods for model criticism and misspecification detection, which test whether the assumed generative model is consistent with observations:
+\begin{equation}
+\nonumber
+p(\bx \mid \btheta)p(\btheta)
+\;\;\xleftrightarrow{\text{consistent with?}}\;\;
+\bxobs
+\;.
+\end{equation}
+What precisely consistency entails depends on the specific analysis goals. No single universal method can confirm consistency for all use cases. The techniques presented here provide a toolkit for careful, self-critical validation.
+
+All approaches in this section address \textbf{Type A} (misspecified model) epistemic uncertainty from Sec.~\ref{sec:diag:taxonomy}. While \textbf{Type B} (lossy summary) and \textbf{Type C} (inexact inference) uncertainties can be diagnosed through reference posterior comparisons and calibration tests (Secs.~\ref{sec:diag:reference} and~\ref{sec:diag:forward_back}), controlled lossy summaries can also \emph{mitigate} model misspecification consequences, as explored in Sec.~\ref{sec:adv:uncertainty:robust}.
+
+\subsection{Robustness Diagnostics}
+\label{sec:diag:misspec:robustness}
+
+\begin{quotation}
+    \textit{``Does it make sense?''}
+    
+    \hfill --- Your inner supervisor
+\end{quotation}
+
+\noindent
+Robustness diagnostics assess whether learned posteriors remain stable under controlled perturbations to the data or the inference pipeline. In a well-specified model, the posterior should reflect only aleatoric uncertainty. Small, structured modifications to the input or modeling assumptions should alter the outcome in a limited and often predictable way. If inference is unusually sensitive to such changes, this indicates deeper failure modes, including type~A uncertainty from model mismatch.
+
+Although a wide range of robust tests can be conceived, we focus here on two common scenarios: (i)~\textit{masking parts of the observed data}, and (ii)~\textit{modifying the summary network used for feature extraction}. These perturbations help reveal over-reliance on specific input features or sensitivity to learned representations—common failure modes in practice. 
+\cw{TODO: Update once structure is settled}
+
+
+\subsubsection{Inference Consistency under Data Masking} 
+
+\cw{TODO: Add references}
+
+A common robustness check is to repeat the analysis on systematically reduced or filtered versions of the data. Such reductions may correspond to excluding certain spatial regions, frequency bands, detector channels, or other domain-specific structures. Formally, let \(\{M_k\}\) be a collection of mask operators acting on the original data \(\bx\), producing \(\bx_k = M_k(\bx)\). Each analysis then trains the inference model on simulations processed by the same operator and applies the resulting posterior to the correspondingly transformed observation, \(\bxobs_{,k} = M_k(\bxobs)\).\footnote{In a likelihood-based analysis this would be considerably more involved, since one would need a closed-form likelihood for the reduced data, \(p(\bx_k \mid \btheta)\), which is often intractable even when the full-data likelihood is known.} If the simulation model matches the true data-generating process, results based on different masked versions should agree within expected posterior variability, typically yielding overlapping high-probability regions. Conversely, if the simulator is misspecified, biases may vary across masks and appear as discrepancies between the corresponding inference results.
+
+
+\paragraph{A hypothesis-testing view} 
+
+From each masked version of the data \( \bx_i = M_i(\bx) \), we obtain a learned posterior \( q_\phi^{(i)}(\btheta \mid \bx_i) \). How can we compare these posteriors meaningfully? Since different masks reveal different aspects of the data, some variation across posteriors is expected; therefore simple discrepancy measures such as the KL divergence, which penalize any difference, are too strict for this purpose.
+
+Drawing on ideas from \emph{posterior conflict diagnostics} in hierarchical models~\cite{xxx}, it is natural to frame the comparison as a hypothesis test. The question is whether the observed masked datasets, \(\bxobs_{,i}\) and \(\bxobs_{,j}\), are compatible with having arisen from the same underlying generative process (\(\mathcal{H}_0\)), or whether they behave as if they were generated independently after masking (\(\mathcal{H}_1\)). That is,
+\[
+\mathcal{H}_0:\; \bx_i,\, \bx_j \sim p(\bx_i, \bx_j)
+\qquad\text{vs.}\qquad
+\mathcal{H}_1:\; \bx_i,\, \bx_j \sim p(\bx_i)\, p(\bx_j)\;,
+\]
+where under \(\mathcal{H}_0\) the joint distribution arises by masking draws from the simulation model,
+\[
+p(\bx_i, \bx_j) = \int d\bx\, d\btheta\, \delta(\bx_i - M_i(\bx))\, \delta(\bx_j - M_j(\bx))\, p(\bx,\btheta)\;.
+\]
+Under \(\mathcal{H}_1\), the two masked views behave as though they contain incompatible information about \(\btheta\).
+
+\paragraph{Posterior-overlap statistic} The optimal test statistic for discriminating \(\mathcal{H}_0\) and \(\mathcal{H}_1\) is the log-likelihood ratio
+\begin{equation}
+    \log R(\bx_i, \bx_j) = \log \frac{p(\bx_i, \bx_j)}{p(\bx_i)\, p(\bx_j)} \simeq \log \int d\btheta\, \frac{q_\phi(\btheta \mid \bx_i)\, q_\phi(\btheta \mid \bx_j)}{p(\btheta)}\;.
+    \label{eqn:posterior_overlap_integral}
+\end{equation}
+On the right-hand side we introduced the \emph{posterior overlap integral}, which measures agreement between posteriors by comparing them to the prior. The integral is symmetric in \(i\) and \(j\), easy to evaluate by Monte Carlo sampling from the learned posteriors (assuming their densities are tractable), and becomes large when the posteriors concentrate on similar regions of parameter space.
+
+The approximation in Eq.~\eqref{eqn:posterior_overlap_integral} becomes exact when the learned posteriors equal the true ones, \(q_\phi(\btheta \mid \bx_k) = p(\btheta \mid \bx_k)\), and when the masked datasets are conditionally independent given \(\btheta\), \(p(\bx_i,\bx_j \mid \btheta) = p(\bx_i \mid \btheta)\, p(\bx_j \mid \btheta)\). The latter holds when the two masks select disjoint or only weakly overlapping regions of the data. Violations of this condition reduce the power of the test but do not invalidate it.
+
+\paragraph{Practical evaluation} Using Eq.~\eqref{eqn:posterior_overlap_integral}, one may directly evaluate the test statistic $\log R(\bxobs_{,i}, \bxobs_{,j})$ for the observed data. Small values indicate inconsistencies between masked views; large values indicate agreement. To quantify statistical significance, one generates Monte Carlo pairs \((\bx,\btheta)\sim p(\bx\mid\btheta)\,p(\btheta)\), applies masks \(M_i\), \(M_j\), and computes \(\log R(\bx_i,\bx_j)\) on these synthetic datasets to obtain \(p\)-values. For more than two masks, the collection of pairwise statistics \(\log R(\bxobs_{,i},\bxobs_{,j})\) provides a convenient diagnostic summary.
+
+\paragraph{Example}
+
+\cw{TODO: Remove example and figure, make text consistent with missing example}
+
+%A global consistency measure compares all \( K \) masked posteriors via
+%\[
+%\log R_{\text{global}} = \log \int d\btheta\, \frac{\prod_{i=1}^K q_\phi(\btheta \mid \bx_i)}{p(\btheta)^{K-1}} \,,
+%\]
+%which tests whether all masked subsets agree on a common parameter value. While this global test may be more powerful, it is also more sensitive to numerical instability and typically has higher variance in high-dimensional problems.
+
+\begin{figure}
+        \centering
+        \includegraphics[width=0.49\linewidth]{figures/simulated_data.png}
+        \includegraphics[width=0.49\linewidth]{figures/posterior_contours.png}
+        \caption{Enter Caption, R=9.6, R=3.3, p=0.57, p=0.014}
+        \label{fig:enter-label}
+\end{figure}
+
+
+\subsection{Posterior Predictive Diagnostics}
+\label{sec:diag:misspec:ppc}
+
+A basic principle in model criticism is that the observed data \( \bxobs \) should be typical under the assumed simulation model \( p(\bx \mid \btheta) \). 
+\emph{Posterior predictive checks} (PPCs) aim to detect systematic discrepancies between the observation and the simulator by comparing \( \bxobs \) to draws from the \emph{posterior predictive distribution}~\citep{xxx, GelmanMengStern1996},
+\[
+p(\tilde\bx\mid \bxobs) = \int  d\btheta \;
+p(\tilde \bx \mid \btheta)\, p(\btheta \mid \bxobs)\, 
+\; .
+\]
+This distribution represents the expected variability of new data, conditional on having generated the observation in the first place. 
+In SBI, the exact posterior is replaced by a learned approximation \(q_\phi(\btheta \mid \bxobs)\), but the conceptual structure is unchanged.
+
+In contrast to prior predictive checks---which test whether \( \bxobs \) is typical under the marginal distribution \(p(\bx)\)---PPCs focus on plausible parameter ranges given $\bxobs$ and are therefore more directly aligned with the observed data.  As such, PPCs can also be viewed as a posterior-predictive analogue of anomaly detection, checking whether \(\bxobs\) falls within the typical region of the predictive distribution. 
+
+
+\subsubsection{Posterior Predictive Checks}
+\label{sec:diag:misspec:ppc:checks}
+
+\cw{TODO: Add references}
+
+PPCs in the classic sense of~\citep{GelmanMengStern1996} do not compare the raw data $\bx$ directly. Instead, one evaluates a \emph{discrepancy function} $D(\bx, \btheta)$ that targets specific features of the data predicted by the model~\cite{xxx}. In many applications $D$ is simply a function of \(\bx\), but allowing a dependence on \(\btheta\) enables conditional or residual-style checks that may be more powerful for some types of mismatch.
+
+Given posterior samples \(\btheta_i \sim q_\phi(\btheta \mid \bxobs)\), one computes
+\[
+D_{\mathrm{obs}}^{(i)} = D(\bxobs,\btheta_i),
+\qquad
+D_{\mathrm{sim}}^{(i)} = D(\tilde\bx_i,\btheta_i),
+\quad
+\tilde\bx_i \sim p(\bx \mid \btheta_i).
+\]
+Under a well-specified model, the values \(D_{\mathrm{obs}}^{(s)}\) should be \emph{typical} relative to the replicated values \(D_{\mathrm{sim}}^{(s)}\): they should not systematically lie in the extreme tails of the posterior predictive distribution. Posterior predictive \(p\)-values,
+\[
+p_{\mathrm{PPC}} \approx \frac{1}{N} \sum_{i=1}^N\mathbb{1}\!\left( D_{\mathrm{sim}}^{(i)} \ge D_{\mathrm{obs}}^{(i)} \right),
+\]
+are typically conservative~\cite{GelmanMengStern1996}: even under a correct model they are not uniformly distributed but squeezed around 0.5.  However, values near 0 or 1 still indicate clear mismatches, although the precise values are only of indicative value.
+
+\paragraph{Choosing \(D\): structured discrepancies for SBI}
+
+The usefulness of a PPC depends critically on the choice of summary \(D\). This choice is often guided by domain knowledge and by the structure of the simulator. Good discrepancy functions capture stable, low-variance aspects of the data that the model is expected to reproduce. Examples include amplitudes, variances, residual structure, frequency content, or more domain-specific descriptors.
+
+A common and effective choice in high-dimensional settings is to construct \emph{residual maps} from posterior predictive draws,
+\[
+R^{(i)} = \bxobs - \tilde\bx_i,
+\]
+and base \(D\) on simple functions of these maps (\fex\ local values, power spectra, or other spatial statistics). Structured residual patterns can reveal systematic mismatches that would remain invisible in other more aggregate scalar summaries.
+
+In settings with learned summaries, one may also define \(D\) in the latent space of the embedding network itself. For example
+\[
+D(\bx) = \| f_\phi(\bx) - f_\phi(\bxobs) \|^2,
+\]
+which checks whether the observed data are typical with respect to the posterior predictive distribution after projection into the learned representation. The PPC thus evaluates model fit in latent space, assessing whether the embedding of the observed data lies in the same typical region as embeddings of posterior predictive samples.
+
+\medskip
+
+To summarise, a typical PPC proceeds by (i) sampling \(\btheta_i\sim q_\phi(\btheta\mid\bxobs)\), (ii) drawing posterior predictive simulations \(\tilde\bx_i\sim p(\bx\mid\btheta_i)\), (iii) evaluating \(D_{\mathrm{obs}}^{(i)}\) and \(D_{\mathrm{sim}}^{(i)}\), and (iv) assessing whether the observed discrepancy is typical relative to the simulated ones, either just visually or via tail probabilities. If the model is well-specified, the observed summary should fall comfortably within the predictive distribution; if not, systematic deviations indicate potential simulator mis-specification.
+
+
+\subsubsection{Log Predictive Density-Based Checks}
+
+\cw{TODO: Add references}
+
+If the exact likelihood function $p(\bx\mid\btheta)$, or a accurate likelihood surrogate \(q_\phi(\bx \mid \btheta)\) is available, one can also consider a density-based discrepancy such as the \emph{log predictive density} (LPD),
+\[
+\mathrm{LPD}(\bxobs) \simeq \log \frac{1}{N} \sum_{i=1}^N q_\phi(\bxobs \mid \btheta_i),
+\qquad \btheta_i \sim q_\phi(\btheta \mid \bxobs).
+\]
+This yields a \(p\)-value by comparing \(\mathrm{LPD}(\bxobs)\) to its distribution under simulated data~\cite{xxx}. While conceptually valid, LPD-based checks are often weak in high-dimensional settings and sensitive to errors in the likelihood approximation. In practice, summary-based PPCs tend to provide more interpretable and sensitive sensitive diagnostics.
+
+
+\subsection{Comparative Model Diagnostics}
+\label{sec:diag:misspec:comparative}
+
+\begin{quotation}
+    \textit{``[...] the first step in the analysis of any decision problem is necessarily a purely intuitive selection by the decision maker of those courses of action which seem to him worthy of further consideration. Only after a set of “reasonable contenders” has thus been defined does it become \emph{possible} to apply formal procedures for choice among them [...]''}
+
+    \hfill --- \cite{raiffa_applied_1961}
+\end{quotation}
+
+
+\noindent
+A central challenge in model criticism is to decide whether the observed data \( \bxobs \) is typical under the assumed generative model. But this task is subtle: what deviations from the model should we test for, and how should we prioritize them? There is no general answer; without structure or assumptions, no diagnostic can be broadly powerful to \emph{all} deviations. This is a version of the \emph{“no free lunch”} principle: just as optimization requires problem-specific guidance, model criticism requires a notion of what kinds of discrepancies are meaningful.
+
+\cw{TODO: Add references throughout}
+
+These questions already appeared when choosing discrepancy functions for PPCs in Sec.~\ref{sec:diag:misspec:ppc}. The strength of PPCs is that they are easy to apply as soon as samples from the posterior predictive distribution are available. However, PPCs express mismatch only indirectly---via tail probabilities or visual comparisons---and their power depends entirely on the chosen summary \(D\).
+
+\medskip
+
+The diagnostics developed in this section follow a similar logic but frame the problem directly as hypothesis testing. This requires additional infrastructure, such as training discriminative networks, but enables more powerful and more targeted tests as well as principled significance calculations.
+
+
+\subsubsection{Structured Hypothesis Tests for Model Criticism}
+
+The basic idea is to define a structured family of augmented simulators, each
+encoding a specific deviation from the baseline model, following ideas from~\cite{xxx}.
+By comparing the baseline model to these structured alternatives, we can cast
+model criticism into an interpretable battery of hypothesis tests---each targeting
+a different type of possible misspecification.
+
+\paragraph{Localized and aggregated deviation tests}
+
+Let \( \mathcal{H}_0 \) denote the baseline simulator, and let each \( \mathcal{H}_i \) for
+\( i \geq 1 \) correspond to an augmented simulator encoding a specific distortion.
+These may be local (e.g., additive bumps, regional biases) or global (e.g., changes
+in overall variance or shape). Each hypothesis defines a data distribution \( p_i(\bx) \),
+with \( p_0(\bx) \equiv p(\bx) \) under the baseline.
+
+For each augmented hypothesis, the optimal test statistic (in the sense of the
+Neyman--Pearson lemma) is the log-likelihood ratio
+\begin{equation}
+\label{eqn:aug_ti}
+t_i(\bxobs) = \log \frac{p_i(\bxobs)}{p_0(\bxobs)}
+\approx f_\phi^{(i)}(\bxobs)\;.
+\end{equation}
+Here, \( t_i(\bx) \) can be approximated by training a binary classifier to distinguish
+samples from \(p_i\) and \(p_0\). Above we assumed that the classifier
+\(f_\phi^{(i)}(\bx)\) is trained to approximate the logit score separating the two classes.
+In practice, when distortions correspond to structured changes in space
+(e.g., image domains), classifiers can be trained jointly using shared neural
+architectures such as U-Nets, with each output channel targeting a different
+hypothesis \( i \).
+
+The test statistic in Eq.~\eqref{eqn:aug_ti} focuses on targeted, isolated distortions
+in the data. Searches based on this statistic assume that only one or a few distinct
+distortions are present. If instead it is plausible that many distortions contribute
+at similar levels, it is natural to consider an aggregate statistic, the simplest of
+which is the sum
+\begin{equation}
+    t_{\mathrm{sum}}(\bxobs) = \sum_{i=1}^N t_i(\bxobs)\;.
+\end{equation}
+In fact,~\cite{xxx} showed that this construction generalizes the classical
+\( \chi^2 \) goodness-of-fit test in likelihood-based analyses. We here implicitly
+assume a uniform prior over distortion types. If the test battery is unbalanced or
+dominated by uninformative directions, the global statistic may be biased or diluted;
+careful design of the distortion set is essential.
+
+More generally, these approaches unify several classical ideas~\cite{xxx}. Localized
+distortions and their associated tests are closely related to matched filters and
+signal-to-noise ratio statistics. Aggregated discrepancy statistics reduce to
+\( \chi^2 \) tests when distortions are orthogonal and noise is Gaussian. In this
+sense, simulator augmentation extends classical residual analysis and goodness-of-fit
+testing to the flexible settings of simulation-based inference.
+
+\paragraph{Local and global significance}
+
+It is common in model criticism to adopt a frequentist perspective when evaluating
+the significance of discrepancies, since priors over different model deviations are
+typically unknown. Each test statistic \( t_i \) gives rise to a local significance level,
+\[
+p_i = \mathbb{E}_{\bx \sim p_0}\!\left[\, \mathbb{1}\!\left(t_i(\bx) \geq t_i(\bxobs)\right)\right],
+\]
+which quantifies the evidence against \( \mathcal{H}_0 \) in favor of the structured
+deviation \( \mathcal{H}_i \). These \emph{local \(p\)-values} target specific, localized
+mismatches and resemble matched filtering or bump hunting in high-energy physics and
+signal processing~\cite{xxx}. An analogous definition applies to the aggregate statistic
+\( t_{\mathrm{sum}} \).
+
+\medskip
+
+Since many hypotheses are tested simultaneously, the chance of picking up a random
+fluctuation increases. To assess the global (overall) significance of the observed
+deviations, one performs a trial correction. A common approach is to compute a
+\emph{global \(p\)-value} based on the most extreme local result (including any
+aggregated tests),
+\[
+p_{\mathrm{global}}
+= \mathbb{E}_{\bx\sim p_0}\!\left[\,
+   \mathbb{1}\!\left( \min_i p_i \leq \min_i p_i(\bxobs) \right)
+ \right]\;.
+\]
+In practice, this global \(p\)-value helps assess whether observed discrepancies are substantial enough to warrant further investigation.
