@@ -130,5 +130,5 @@ axes[1].text(-0.15, 1.0, '(b)', transform=axes[1].transAxes,
              fontsize=10, fontweight='bold', va='top', ha='right')
 
 plt.tight_layout()
-plt.savefig('figure_divergences.pdf', format='pdf', bbox_inches='tight')
+plt.savefig('figures/figure_divergences.pdf', format='pdf', bbox_inches='tight')
 plt.show()
