@@ -89,7 +89,7 @@ axes[0].set_yscale('log')
 axes[0].set_ylim(1e-3, 2.0)
 axes[0].set_xlim(-5, 10)
 axes[0].set_xlabel(r'$\theta$')
-axes[0].set_ylabel('Log Density')
+axes[0].set_ylabel('Probability density')
 axes[0].spines['top'].set_visible(False)
 axes[0].spines['right'].set_visible(False)
 
@@ -115,9 +115,9 @@ for i, p_name in enumerate(dist_names):
 
 # ADJUSTMENT 2: Removed offset. Ticks are now mathematically centered on the groups.
 axes[1].set_xticks(x_pos) 
-axes[1].set_xticklabels(metric_labels, rotation=45, ha='right')
+axes[1].set_xticklabels(metric_labels, rotation=45, ha='center')
 
-axes[1].set_ylabel('Value (Log Scale)')
+axes[1].set_ylabel('Divergence value')
 axes[1].set_ylim([1e-2, 3e0]) 
 axes[1].set_yscale('log')
 axes[1].spines['top'].set_visible(False)
