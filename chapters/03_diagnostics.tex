@@ -172,13 +172,11 @@ Some common $f$-divergences can be found in Tab.~\ref{tab:divergences}. They inc
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\linewidth]{figures/figure_divergences.pdf}
-%    \includegraphics[width=0.49\linewidth]{figures/div_shapes.png}
-%    \includegraphics[width=0.49\linewidth]{figures/div_values.png}
+    \includegraphics[width=\linewidth]{figures/fig_divergences.pdf}
     \caption{
         Illustration of how different divergences respond to different types of posterior mismatch.
-        \textit{Left:} Reference distribution $q(\theta)$ (black dashed) and three approximate distributions exhibiting different types of mismatch: $p_1(\theta)$ with bias (blue), $p_2(\theta)$ with overdispersion (orange), and $p_3(\theta)$ with an additional mode (green). 
-        \textit{Right:} Divergence values between the reference and approximate distributions, demonstrating that different divergence measures exhibit varying sensitivity to different aspects of posterior mismatch. Metrics are rescaled as indicated to ease comparison and ordered by relative sensitivity to unmodeled modes. \cw{TODO: Fix figure labels}
+        (a) Reference distribution $q(\theta)$ (black dashed) and three approximate distributions exhibiting different types of mismatch: $p_1(\theta)$ with bias (blue), $p_2(\theta)$ with overdispersion (orange), and $p_3(\theta)$ with an additional mode (green). 
+        (b) Divergence values between the reference and approximate distributions, demonstrating that different divergence measures exhibit varying sensitivity to different aspects of posterior mismatch. Metrics are rescaled as indicated to ease comparison and ordered by relative sensitivity to unmodeled modes. 
     }
     \label{fig:posterior_divergences}
 \end{figure}
@@ -388,8 +386,9 @@ This uniformity condition underpins both SBC and PIT-based diagnostics: deviatio
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes.png}
-    \includegraphics[width=0.49\linewidth]{figures/SBC_histograms.png}
+    \includegraphics[widht=\linewidth]{figures/fig_sbc.pdf}
+    %\includegraphics[width=0.49\linewidth]{figures/SBC_shapes.png}
+    %\includegraphics[width=0.49\linewidth]{figures/SBC_histograms.png}
     \caption{Simulation-based calibration. \emph{Left panel:} Exact, shifted, overdispersed, and underdispersed inferred posteriors, $q_\phi(\theta \mid \mathbf{x})$, compared to the ground-truth posterior, $p(\theta \mid \mathbf{x})$ (gray). 
     \emph{Right panel:} Resulting rank histogram (with $L=10$ and $N=10000$). Even small biases in the shape are detected. We assume that the type of mismodeling is uniform across different values of $\mathbf{x}$.}
     \label{fig:SBC_basics}
@@ -412,8 +411,9 @@ Even mild miscalibration leaves a visible trace. All of these departures can be 
 
 \begin{figure}[th]
     \centering
-    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes_nonuniform.png}
-    \includegraphics[width=0.49\linewidth]{figures/SBC_histogram_nonuniform.png}
+    \includegraphics[width=\linewidth]{figures/fig_sbc_bias.pdf}
+    %\includegraphics[width=0.49\linewidth]{figures/SBC_shapes_nonuniform.png}
+    %\includegraphics[width=0.49\linewidth]{figures/SBC_histogram_nonuniform.png}
     \caption{If deviations between the inferred posterior \( q_\phi(\theta \mid \bx) \) and the ground truth \( p(\theta \mid \bx) \) vary with the observation \( \bx \), they can partially cancel out in the overall SBC histogram. \emph{Left panel:} Comparison of a uniform (i.e., \( \bx \)-independent) bias with a non-uniform bias that changes across data space. \emph{Right panel:} The rank histogram for the non-uniform case appears nearly uniform when aggregated over all \( \bx \), but stratifying by data subsets reveals the underlying miscalibration.}
     \label{fig:SBC_non_uniform_bias}
 \end{figure}
