@@ -420,8 +420,7 @@ Even mild miscalibration leaves a visible trace. All of these departures can be 
 
 \begin{figure}[th]
     \centering
-    \includegraphics[width=0.49\linewidth]{figures/SBC_shapes_suboptimal.png}
-    \includegraphics[width=0.49\linewidth]{figures/SBC_histogram_suboptimal.png}
+    \includegraphics[width=\linewidth]{figures/fig_sbc_lossy.pdf}
     \caption{SBC and HPDR coverage tests are sensitive to overdispersion but largely insensitive to posteriors based on suboptimal data compression. Shown are two scenarios: an overdispersed posterior \( q_\phi(\theta \mid \bx) \propto p(\theta \mid \bx)^{1/2} \), and a calibrated but suboptimal posterior \( q_\phi(\theta \mid \bx) = p(\theta \mid T(\bx)) \) based on a lossy summary. Both are broader than the ground truth, but for different reasons: the overdispersed posterior overestimates uncertainty, while the suboptimal one correctly reflects additional variation due to limited information.}
     \label{fig:SBC_insufficiency}
 \end{figure}
