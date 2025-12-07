@@ -110,5 +110,5 @@ ax1.legend(loc='upper center', frameon=False, ncol=1, columnspacing=1.0)
 ax1.text(-0.15, 1.0, '(b)', transform=ax1.transAxes, fontweight='bold', fontsize=10, va='top', ha='right')
 
 plt.tight_layout()
-plt.savefig('figures/figure_3_4_1_sbc.pdf', format='pdf', bbox_inches='tight')
+plt.savefig('figures/fig_sbc.pdf', format='pdf', bbox_inches='tight')
 plt.show()
