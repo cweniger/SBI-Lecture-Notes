@@ -647,8 +647,7 @@ For example, a 95\% credible interval corresponds to \( z \approx 1.96 \), and a
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.49\linewidth]{figures/cov_shape_blind.png}
-    \includegraphics[width=0.49\linewidth]{figures/cov_pp_blind.png}
+    \includegraphics[width=\linewidth]{figures/fig_coverage_shape_distortion.pdf}
     \caption{Examples of inferred posteriors \( q(\theta \mid \bx) \) that are specifically constructed to match the HPDI coverage of the true posterior \( p(\theta \mid \bx) \), despite visibly differing in shape and location. This illustrates a blind spot of HPDI-based diagnostics: they test only the posterior mass within super-level sets of \( q \), and are thus insensitive to mass redistribution along contour surfaces. The deviations shown here would be readily detected by SBC.}
     \label{fig:blind_cov}
 \end{figure}
