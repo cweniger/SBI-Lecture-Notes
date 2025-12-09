@@ -129,7 +129,7 @@ The general architecture of networks and training in simulation-based inference 
 
 \begin{figure}[ht]
 \centering
-    \includegraphics[width=0.85\linewidth]{figures/fig3.drawio.pdf}
+    \includegraphics[width=0.90\linewidth]{figures/fig3.drawio.pdf}
     \caption{Basic architecture for simulation-based inference. \textit{Green box:} Simulation of parameters $\btheta \sim p(\btheta)$ and corresponding observations $\mathbf{x} \sim p(\mathbf{x} \mid \btheta)$. \textit{Yellow box:} An (optional) summary extractor $T_\phi(\mathbf{x})$ to compresses high-dimensional data into informative features. \textit{Red box:} The inference head approximates the target statistical relationship. \textit{Gray box:} The inference loss $\mathcal{L}$ defines what statistical quantity is learned. \textit{Right panels:} Example outputs.}
     \label{fig:sbi_overview}
 \end{figure}
