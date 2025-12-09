@@ -79,8 +79,8 @@ panels = [
     ('Raw Distribution', None),
     (r'Order: $\theta_1$', ord_theta1),
     (r'Order: $\theta_2$', ord_theta2),
-    (r'Order: $\log q(\theta)$', ord_log_q),
-    (r'Order: $\log p(\theta)$', ord_log_p),
+    (r'Order: $\log q(\boldsymbol{\theta} \mid \mathbf{x})$', ord_log_q),
+    (r'Order: $\log p(\mathbf{x} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})$', ord_log_p),
     (r'Order: Radial', ord_dist_origin),
     (r'Order: Diagonal (+)', ord_proj_diag),
     (r'Order: Diagonal (-)', ord_proj_anti),
@@ -143,15 +143,16 @@ for i, (title, func) in enumerate(panels):
         ax.contour(X, Y, pdf_p_val, colors='#004488', linestyles='-', alpha=0.5, linewidths=0.8)
         
         # Manually construct "Legend" inside text box
-        ax.text(0.03, 0.97, 'True p (blue)\nLearned q (dash)', transform=ax.transAxes, 
-                fontsize=7, verticalalignment='top', bbox=props)
+        ax.text(0.03, 0.97, r"True $p(\boldsymbol{\theta} \mid \mathbf{x})$ (blue)"+"\n"+
+                r"Learned $q(\boldsymbol{\theta} \mid \mathbf{x})$ (dash)", transform=ax.transAxes, 
+                fontsize=8, verticalalignment='top', bbox=props, zorder = 100)
         ax.set_facecolor('#fafafa')
         
     else:
         draw_contours(ax, func, theta_true, thetas_q, bounds)
         # Title inside panel
         ax.text(0.03, 0.97, title, transform=ax.transAxes, 
-                fontsize=7, verticalalignment='top', bbox=props)
+                fontsize=8, verticalalignment='top', bbox=props, zorder = 100)
         
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
@@ -163,5 +164,5 @@ for i, (title, func) in enumerate(panels):
         spine.set_linewidth(0.5)
         spine.set_color('#cccccc')
 
-plt.savefig('fig_grd_illustration.pdf', format='pdf', bbox_inches='tight', dpi=300)
+plt.savefig('figures/fig_grd_illustration.pdf', format='pdf', bbox_inches='tight', dpi=300)
 plt.show()
