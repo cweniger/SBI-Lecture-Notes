@@ -5,7 +5,7 @@ from scipy.special import logsumexp
 
 # --- 1. Settings & Distribution Definitions ---
 np.random.seed(43) 
-N_q = 50 # Number of posterior samples
+N_q = 64 # Number of posterior samples
 
 # --- Define Custom Mixture Class ---
 class GaussianMixture:
@@ -14,6 +14,7 @@ class GaussianMixture:
         self.weights /= self.weights.sum() # Normalize
         self.means = [np.array(m) for m in means]
         self.covs = [np.array(c) for c in covs]
+        self.precs = [np.linalg.inv(c) for c in covs] # Precompute precisions
         self.n_components = len(weights)
         
     def pdf(self, x):
@@ -31,6 +32,29 @@ class GaussianMixture:
             log_p = stats.multivariate_normal.logpdf(x, mean=m, cov=c)
             component_log_pdfs.append(log_w + log_p)
         return logsumexp(np.column_stack(component_log_pdfs), axis=1)
+
+    def score(self, x):
+        """Computes the gradient of log p(x) with respect to x."""
+        x = np.atleast_2d(x)
+        n_samples = x.shape[0]
+        
+        numerator = np.zeros_like(x)
+        denominator = np.zeros(n_samples)
+        
+        for w, m, c, P in zip(self.weights, self.means, self.covs, self.precs):
+            # p_k(x)
+            dens = w * stats.multivariate_normal.pdf(x, mean=m, cov=c)
+            dens = np.atleast_1d(dens)
+            
+            denominator += dens
+            
+            # Gradient of log p_k(x) is -P(x - mu)
+            diff = x - m
+            grad_log_pk = -np.einsum('ij,nj->ni', P, diff)
+            
+            numerator += dens[:, None] * grad_log_pk
+            
+        return numerator / (denominator[:, None] + 1e-15)
 
     def rvs(self, size=1):
         choices = np.random.choice(self.n_components, size=size, p=self.weights)
@@ -67,26 +91,33 @@ def ord_theta1(t): return t[:, 0]
 def ord_theta2(t): return t[:, 1]
 def ord_log_q(t):  return dist_q.logpdf(t)
 def ord_log_p(t):  return dist_p.logpdf(t)
-def ord_dist_origin(t): return -np.linalg.norm(t, axis=1) 
-def ord_proj_diag(t): return (t[:,0] + t[:,1]) / np.sqrt(2) 
-def ord_proj_anti(t): return (t[:,0] - t[:,1]) / np.sqrt(2)
-def ord_random(t): 
-    np.random.seed(1)
-    w = np.random.randn(2)
-    return t.dot(w)
 
+# Score Components (Nabla log p)
+def ord_score_0(t): return dist_p.score(t)[:, 0]
+def ord_score_1(t): return dist_p.score(t)[:, 1] # NEW
+
+# Log Ratio
+def ord_log_ratio(t): return dist_q.logpdf(t) - dist_p.logpdf(t)
+
+
+# --- 3. Panel Configuration ---
+# Row 1: Dist, theta1, theta2, log q
+# Row 2: log(q/p), nabla_1, nabla_2, log p
 panels = [
+    # Row 1
     ('Raw Distribution', None),
     (r'Order: $\theta_1$', ord_theta1),
     (r'Order: $\theta_2$', ord_theta2),
     (r'Order: $\log q(\boldsymbol{\theta} \mid \mathbf{x})$', ord_log_q),
-    (r'Order: $\log p(\mathbf{x} \mid \boldsymbol{\theta}) p(\boldsymbol{\theta})$', ord_log_p),
-    (r'Order: Radial', ord_dist_origin),
-    (r'Order: Diagonal (+)', ord_proj_diag),
-    (r'Order: Diagonal (-)', ord_proj_anti),
+    
+    # Row 2
+    (r'Order: $\log \frac{q(\boldsymbol{\theta}\mid \mathbf{x})}{\pi(\boldsymbol{\theta} \mid \mathbf{x})}$', ord_log_ratio),
+    (r'Order: $\nabla_{\boldsymbol{\theta}_1} \log \pi(\boldsymbol{\theta} \mid \mathbf{x})$', ord_score_0),
+    (r'Order: $\nabla_{\boldsymbol{\theta}_2} \log \pi(\boldsymbol{\theta} \mid \mathbf{x})$', ord_score_1), # New
+    (r'Order: $\log \pi(\boldsymbol{\theta} \mid \mathbf{x})$', ord_log_p),
 ]
 
-# --- 3. Plotting Helper ---
+# --- 4. Plotting Helper ---
 def draw_contours(ax, ord_func, t_true, t_samples, bounds):
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[2], bounds[3], 100)
@@ -103,24 +134,23 @@ def draw_contours(ax, ord_func, t_true, t_samples, bounds):
     sorted_scores = np.sort(scores_q)
     
     # 1. Contours for Learned Samples
-    ax.contour(X, Y, Z, levels=sorted_scores, cmap='viridis', 
+    #print(sorted_scores.min(), sorted_scores.max())
+    L = len(sorted_scores)
+    colors = plt.cm.viridis(np.linspace(0, 1, L))
+    ax.contour(X, Y, Z, levels=sorted_scores, colors=colors,
                alpha=0.4, linewidths=0.6, zorder=1)
     
     # 2. Contour for True Sample
     ax.contour(X, Y, Z, levels=[score_true], colors='#BB5566', 
                linewidths=2.0, zorder=10)
 
-# --- 4. Main Plot ---
-# Size: 6.3 inches width corresponds to typical text width on A4 with margins
-# Height 3.2 makes individual panels roughly square/compact
+# --- 5. Main Plot ---
 fig, axes = plt.subplots(2, 4, figsize=(6.3, 3.2), sharex=True, sharey=True)
 axes = axes.flatten()
 plt.subplots_adjust(wspace=0.05, hspace=0.05, left=0.01, right=0.99, top=0.99, bottom=0.01)
 
 bounds = [-4, 4, -4, 4]
-
-# Styling box for internal titles
-props = dict(boxstyle='square,pad=0.2', facecolor='white', alpha=0.85, edgecolor='none')
+props = dict(boxstyle='square,pad=0.2', facecolor='white', alpha=0.9, edgecolor='none')
 
 for i, (title, func) in enumerate(panels):
     ax = axes[i]
@@ -142,24 +172,27 @@ for i, (title, func) in enumerate(panels):
         ax.contour(X, Y, pdf_q_val, colors='black', linestyles='--', alpha=0.6, linewidths=0.8)
         ax.contour(X, Y, pdf_p_val, colors='#004488', linestyles='-', alpha=0.5, linewidths=0.8)
         
-        # Manually construct "Legend" inside text box
-        ax.text(0.03, 0.97, r"True $p(\boldsymbol{\theta} \mid \mathbf{x})$ (blue)"+"\n"+
-                r"Learned $q(\boldsymbol{\theta} \mid \mathbf{x})$ (dash)", transform=ax.transAxes, 
-                fontsize=8, verticalalignment='top', bbox=props, zorder = 100)
-        ax.set_facecolor('#fafafa')
+        # Safe LaTeX String
+        label_text_p = r"True $p(\boldsymbol{\theta} \mid \mathbf{x})$ (blue)"
+        label_text_q = r"Learned $q(\boldsymbol{\theta} \mid \mathbf{x})$ (dash)"
+        
+        ax.text(0.05, 0.96, label_text_p, transform=ax.transAxes, 
+                fontsize=8, color='#004488', fontweight='bold', verticalalignment='top', bbox=props, zorder=100)
+        ax.text(0.05, 0.85, label_text_q, transform=ax.transAxes, 
+                fontsize=8, color='black', verticalalignment='top', bbox=props, zorder=100)
+        
+        ax.set_facecolor('#fdfdfd')
         
     else:
         draw_contours(ax, func, theta_true, thetas_q, bounds)
-        # Title inside panel
         ax.text(0.03, 0.97, title, transform=ax.transAxes, 
-                fontsize=8, verticalalignment='top', bbox=props, zorder = 100)
+                fontsize=8, verticalalignment='top', bbox=props, zorder=100)
         
     ax.set_xlim(bounds[0], bounds[1])
     ax.set_ylim(bounds[2], bounds[3])
     ax.set_xticks([])
     ax.set_yticks([])
     
-    # Remove outer spines for cleaner look
     for spine in ax.spines.values():
         spine.set_linewidth(0.5)
         spine.set_color('#cccccc')
