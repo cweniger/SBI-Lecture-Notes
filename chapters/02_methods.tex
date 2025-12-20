@@ -279,6 +279,7 @@ As noted above, the use of NPE requires density estimators that produce normaliz
 A key strength of NPE is that it enables the joint learning of data summaries and posterior estimation. In practice, many architectures used for NPE include a summary network \( T_\phi(\bx) \), which maps high-dimensional observations to a lower-dimensional representation. The density estimator then operates on this compressed form: \( q_\phi(\btheta \mid \bx) \to q_\phi(\btheta \mid T_\phi(\bx)) \).
 
 In this setup, Eq.~\eqref{eqn:NPE_limit} implies\footnote{This follows from the non-negativity of the KL divergence. The reasoning is analogous to the derivation of the Evidence Lower Bound (ELBO) in variational inference.} that minimizing the NPE loss also minimizes an upper bound on the expected posterior entropy conditioned on the summary:
+\cw{TODO: Mention information theoretic bottlenemck 2511.04681 and refs therein; variational lower bound on mutual information}
 \[
 \mathcal{L}_{\text{NPE}} 
 \;\geq\;
@@ -290,7 +291,7 @@ In this setup, Eq.~\eqref{eqn:NPE_limit} implies\footnote{This follows from the 
 \]
 The bound becomes tight when the conditional estimator is exact, \( q_\phi(\btheta \mid T_\phi(\bx)) = p(\btheta \mid T_\phi(\bx)) \). Therefore, optimizing the summary network \( T_\phi(\bx) \) end-to-end encourages summaries that minimize posterior uncertainty.
 
-Using the identity
+Using the identity \cw{Variational lower bound}
 \begin{equation}
 \mathbb{E}_{p(\bx)}
 \mathcal{H}(p(\btheta \mid T_\phi(\bx)))
@@ -298,6 +299,7 @@ Using the identity
 \label{eqn:NPE_MI}
 \end{equation}
 it follows that minimizing posterior entropy is equivalent to maximizing the mutual information between \( \btheta \) and the summary \( T_\phi(\bx) \). In this sense, the learned summaries are \emph{information-maximizing}.
+\cw{Cite Alsing}
 
 This property is one of the main practical advantages of NPE, but also a potential limitation: if no efficient summary representation exists for the problem, posterior accuracy may be fundamentally limited.
 
@@ -566,5 +568,322 @@ This can be mitigated by estimating ratios between intermediate parameters with 
 \section{Advanced Methods}
 \label{sec:methods:advanced}
 
+\subsection{Conditional Generative Models for Simulation-Based Inference}
+
+Any generative model that produces parameter samples $\btheta$ can be turned into a simulation-based inference method by conditioning it on data $\bx$ and training it on parameter--data pairs drawn from the forward model, $p(\bx \mid \btheta)\, p(\btheta)$. This observation provides a unifying perspective on simulation-based inference and explains why recent advances in generative modeling can often be incorporated into SBI with minimal conceptual effort.
+
+\paragraph{Unconditional generative models}
+
+In order to see this, we begin with a generic formulation of generative modeling. A generative model is defined by a \emph{map} that transforms samples from a simple tractable base distribution into samples of interest,
+%
+\begin{equation}
+    \btheta = G_\phi(\bepsilon), \qquad \bepsilon \sim p(\bepsilon)\;.
+\end{equation}
+%
+Here, the \emph{generator} $G_\phi$ induces a model distribution over $\btheta$, which can be written in pushforward notation as,
+%
+\begin{equation}
+q_\phi(\btheta) = (G_\phi)_\#\, p(\bepsilon)\;.
+\end{equation}
+%
+Note that samples $\btheta \sim q_\phi(\btheta)$ are obtained by pushing samples from $p(\bepsilon)$ through the generator, whereas evaluating the density $q_\phi(\btheta)$ requires inversion of the map and access to the corresponding log-determinant.
+
+Generally, the parameters $\phi$ of the generator are learned by minimizing a suitable loss, averaged over target samples $\btheta \sim p(\btheta)$,
+%
+\begin{equation}
+    \phi^\star
+    =
+    \arg\min_\phi
+    \;
+    \mathbb{E}_{\btheta \sim p(\btheta)}
+    \big[
+    \mathcal{L}\big(\btheta, G_\phi\big)
+    \big]
+    \quad
+    \Rightarrow
+    \quad
+    q_{\phi^\ast}(\btheta) \approx p(\btheta).
+\end{equation}
+%
+For an appropriately chosen loss function, the induced model distribution provides then an accurate approximation to the target distribution.
+
+\paragraph{Conditional generative models for SBI}
+
+\emph{Conditioning} the generator on an auxiliary variable $\bx$ means allowing the generative map---and hence the distribution of generated parameter samples---to depend explicitly on the data.  This yields a conditional generative model,
+%
+\begin{equation}
+\btheta = G_\phi(\bx,\bepsilon),
+\qquad
+\bepsilon \sim p(\bepsilon)\;.
+\end{equation}
+%
+For a fixed observation $\bx$, the generator then defines a conditional distribution over the parameters, which in pushforward notation can be written as
+%
+\begin{equation}
+q_\phi(\btheta \mid \bx)
+=
+(G_\phi(\bx,\cdot))_\#\, p(\bepsilon)\;.
+\end{equation}
+%
+Sampling and evaluation from this conditional distribution generally proceeds as we discussed above.
+
+In simulation-based inference, training data are drawn from the forward model $p(\bx \mid \btheta)p(\btheta)$. Importantly, the conditional generator is trained by \emph{minimizing the same loss} as in the unconditional case, now averaged over this joint distribution,
+%
+\begin{equation}
+\phi^\star
+=
+\arg\min_\phi
+\;
+\mathbb{E}_{(\btheta,\bx)\sim p(\btheta)p(\bx\mid\btheta)}
+\big[
+\mathcal{L}\big(\btheta, G_\phi(\bx,\cdot)\big)
+\big]
+\quad
+\Rightarrow
+\quad
+q_{\phi^\ast}(\btheta\mid \bx) \approx p(\btheta\mid \bx).
+\end{equation}
+%
+The learned induced distribution approximates then by construction the true posterior $p(\btheta \mid \bx)$.
+
+\medskip
+
+Different choices of the loss $\mathcal{L}$ recover a wide range of inference methods, including likelihood-based density estimation, score-based and diffusion models, flow-matching approaches, as well as adversarial or contrastive objectives. In this sense, conditional generative modeling provides a unifying abstraction for modern simulation-based inference methods.
+\cw{TODO: Link to below and previous sections}
+
+
+
+\subsection{Gradient-Based Techniques}
+\label{sec:gradient_based_techniques}
+
 \cw{TODO: Write advanced method section}
 
+\subsubsection{Flow Matching}
+
+An alternative training strategy for continuous normalizing flows, as discussed in Sec.~\ref{sec:core_methods_flows}, was introduced in \cite{lipman_flow_2023} for generative models and adopted to the conditional structures of simulation-based inference in \cite{wildberger_flow_2023}. The advantage is that it does not require integration of ODEs during training, only at the evaluation stage. We will here briefly discuss the mechanisms and connection with NPE.
+
+\paragraph{Connecting base and target distributions through ODEs}
+Like for CNFs, the goal is to transform parameters $\btheta_0$ drawn from a simple and tractable base distribution $p_0(\btheta)$ into parameters $\btheta \equiv \btheta_1$ that are effecitvely drawn from the model posterior $p(\btheta \mid \bx)$.  The transformation is modeled as a solution to the ODE
+%
+\begin{equation}
+    \frac{d}{dt}\btheta_t = \mathbf{v}_\phi(\btheta_t, \bx, t) \quad \text{with} \quad \btheta_0 \sim p_0(\btheta_0),
+\end{equation}
+%
+with time parameter $t\in [0, 1]$, and where $\mathbf{v}_\phi$ is a learnable velocity field in parameter space.  Since we are interested in modeling a data conditioned distribution, this velocity field has to be conditioned on $\bx$.
+
+The above ODE gives rise to a family of distributions of the intermediate parameters $\btheta_t$, which we call $q_{\phi, t}(\btheta_t \mid \bx)$. Its evolution is given by the standard \emph{continuity equation}, 
+%
+\begin{equation}
+    \frac{\partial}{\partial t} q_{\phi, t}(\btheta \mid \mathbf{x}) = -\nabla_{\btheta} \cdot \big(q_{\phi, t}(\btheta \mid \bx) \mathbf{v}_\phi(\btheta, \bx, t)\big)\;,
+    \label{eqn:flow_matching_theta}
+\end{equation}
+%
+which implies that the derivative of the density field is given by the negative divergence of the velocity field,
+
+\medskip
+
+As for CNFs, the training goal is that the endpoint at $t=1$ approximates the full posterior:
+\[
+q_\phi(\btheta \mid \bx) \equiv q_{\phi,1}(\btheta_{1} \mid \bx, 1) \approx p(\btheta \mid \bx).
+\]
+However, in contrast to CNFs which are directly matching the learned distribution $q_\phi(\btheta\mid \bx)$ at $t=1$ against the target $p(\btheta \mid \bx)$ through maximum likelihood objectives, flow matching train the velocity field for all values of $t$. 
+
+\paragraph{Training objective} While CNF leaves the path connecting to base distribution at $t=0$ and the target distribution at $t=1$ essentially unconstrained, flow matching requires to define a connecting path for all values of $\btheta_t$, and the corresponding velocity field consistent with Eq.~\eqref{eqn:flow_matching_theta}, upfront.
+
+Although there is in principle high flexibility in defining the transport map from base samples $\btheta_0$ to target samples $\btheta_1$, the implied velocity field has to remain tractable. A typical starting point is to define the path through convolution with a distortion function,
+\[
+p_t(\btheta_t \mid \bx) = \int d\btheta\; p_t(\btheta_t \mid \btheta_1 = \btheta) p(\btheta \mid \bx)
+\]
+such that $p_0(\btheta_0 \mid \btheta_1) = p_0(\btheta_0)$ and $p_1(\btheta_1 \mid \bx) \simeq p(\btheta =\btheta_1\mid \bx)$.
+
+The distortion function $p_t(\btheta_t \mid \btheta_1)$ takes samples from the target distribution and redistributes them at some earlier time $t<1$. A common ansatz is to define a distortion function 
+\[
+p_t(\btheta_t \mid \btheta_1 ) = \mathcal{N}(\btheta_t \mid \alpha_t \btheta_1, \sigma_t^2 \mathbf{I})
+\]
+which rescales $\btheta_1$ depending on the scheduling function \cw{???} with boundary conditions $\alpha_t$ and $\sigma_t$, where $\alpha_0 = 1$, $\alpha_1=0$, $\sigma_1 = 0$, $\sigma_1 = 1$.
+
+After defining the path, the remaining challenge is to identify the velocity field that would lead to this probability distribution path. Although this is generally challenging, for the above construction, 
+it can be shown 
+\citep{lipman_flow_2023, wildberger_flow_2023}
+that tractability of the vector field that generates the conditional distribution $p_t(\btheta_t \mid \btheta_1, \bx)$ is enough to estimate the vector field for unconditional distribution. In fact, through application of the continuity equation one can show that
+\[
+\mathbf{u}(\btheta_t, \bx) = \mathbb{E}_{\btheta_1 \sim p(\btheta_1 \mid \btheta_t, \bx)} [\mathbf{u}(\btheta_t \mid \btheta_1)]\;,
+\]
+where $\mathbf{u}(\btheta_t, \bx)$ denotes the velocity field of the \emph{target} path, that we aim to approximate through the neural velocity field $\mathbf{v}_\phi$, and $\mathbf{u}(\btheta_t \mid \btheta_1)$ is the velocity field of the path defined by the distortion function $p_t(\btheta_t \mid \btheta_1)$.
+One can show that the conditional velocity field is given can be estimated as
+$$
+\mathbf{u}(\btheta_t \mid \btheta_1) = \mathbb{E}[\alpha'_t \btheta_1 + \sigma'_t \boldsymbol{\varepsilon} \mid \btheta_t ]\;.
+$$
+
+This leads to the loss function
+\[
+\mathcal{L}_{\text{FMPE}} = \mathbb{E}_{
+t\sim \mathcal{U}(0, 1),
+\btheta \sim p(\bx \mid \btheta) p(\btheta),
+\btheta_t \sim p(\btheta_t \mid \btheta_1 = \btheta)
+}
+\|\mathbf{v}_\phi(\btheta_t, \bx, t) - \mathbf{u}(\btheta_t \mid \btheta_1 = \btheta)
+\|^2.
+\]
+
+\cite{wildberger_flow_2023} show that under specific regularity conditions, there is the bound
+\[
+D_{\text{KL}}(p(\btheta \mid \bx) \, \| \, q_\phi(\btheta \mid \bx) ) < C \cdot \mathcal{L}_{\text{FMPE}}
+\]
+for some constant $C>0$. This suggests that much of the logic and empirical aspects of NPE also apply to flow matching. Like for NPE, one can train end-to-end embedding networks, evaluate log density without much cost (requires integration over the trained vector field), and perform fast sampling through forward integration.
+
+
+\subsubsection{Score Matching}
+
+Stochasticity can be introduced via the SDE
+\begin{equation}
+d\btheta_t = \mathbf{f}_{\phi}(\btheta_t, \mathbf{x}, t)dt + g(t)d\mathbf{W}
+\quad
+\text{with}
+\quad
+\btheta_0 \sim p_0(\btheta)
+\end{equation}
+
+This induces a probability distribution that evolves like the Fokker-Planck equation,
+
+\begin{equation}
+    \frac{\partial}{\partial t} q_{\phi, t}(\btheta \mid \mathbf{x}) = -\nabla_{\btheta} \cdot \big(q_{\phi, t}(\btheta \mid \bx) \mathbf{f}_\phi(\btheta, \bx, t)\big)
+    + \frac12 g(t)^2\, \nabla_{\btheta}^2\, q_{\phi, t}(\btheta \mid \bx)
+    \;,
+    \label{eqn:flow_matching_theta}
+\end{equation}
+
+Although individual paths are fundamentally different to ODE, for each SDE one can find an equavlent ODE with the velocity field
+%
+\begin{equation}
+    \mathbf{v}_\text{eff}(\btheta, \bx, t) = \mathbf{f}_\phi(\btheta, \bx, t)
+    - \frac12 g(t)^2 \nabla_{\btheta} \log q_{\phi, t}(\btheta \mid \bx)
+\end{equation}
+%
+Similar solution space, but different learning dynamics.
+
+
+
+
+
+
+With the standard assumption $g(t)^2 = 2\sigma_t\sigma'_t$, the drift term becomes:
+$$
+\mathbf{u}_{\text{diff}}(\mathbf{x}, t) = \frac{\alpha'_t}{\alpha_t}\mathbf{x} - \frac{\sigma'_t}{\sigma_t}\mathbb{E}[\boldsymbol{\varepsilon} | \mathbf{x}_t = \mathbf{x}]
+$$
+This shows that training to predict the noise $\boldsymbol{\varepsilon}$ suffices:
+\begin{equation}
+   \mathcal{L} = \mathbb{E}_{t,\mathbf{x}_1,\boldsymbol{\varepsilon}} \left[\left\|\boldsymbol{\varepsilon}_\theta(\mathbf{x}_t, t) - \boldsymbol{\varepsilon}\right\|^2\right]
+\end{equation}
+Sampling is performed by solving the reverse SDE from noise to data.
+
+
+Using the continuity equation, the log-density evolves along trajectories according to the instantaneous change-of-variables formula (\textit{i.e.}, its infinitesimal change in time along the flow),
+\cw{TODO: Restructure text such that the two ODEs are shown together, so that the connection is clear}
+allowing computation of the exact likelihood via integration. CNFs enable flexible modeling of complex distributions while maintaining exact and tractable likelihoods. The dynamics \( f_\phi \) are typically parameterized by dense neural networks (MLPs) and trained by maximizing the likelihood over observed data using ODE solvers with automatic differentiation.
+
+- dz/dt = f & d/dt log p = grad f
+- loss on p(x, t=T)
+
+- 
+
+\medskip
+
+\cw{TODO: Need to talk about conditional flows!!!}
+
+\cw{TODO: Fine for now, but should be more evolved in the future}
+A further generalization of continuous flows introduces stochasticity into the transformation process. Rather than following deterministic dynamics, the latent variable evolves according to a stochastic differential equation, allowing the model to inject noise and capture richer, more multimodal distributions. This extension leads to the class of \emph{diffusion models}, which have recently gained prominence in generative modeling.
+
+In contrast to normalizing flows and CNFs---where the transformation is learned end-to-end---diffusion models define a fixed forward process that gradually corrupts data with noise, and then learn to reverse this process. The transformation is thus guided: the forward dynamics are predefined, and the learning focuses on inverting them. While diffusion models offer powerful generative capabilities, they differ fundamentally from the flow-based methods discussed here, and we will not cover them in detail.
+
+
+
+\subsubsection{Denoising Score Matching}
+
+%\cw{TODOREF - Score-based}
+
+The Fisher divergence, Eq.~\eqref{eqn:FisherDiv}, only depends on the score function, and can in principle be used to build a simulation-based inference algorithm by focusing on the loss function
+%
+\begin{equation}
+    \bbE_{p(x)} [D_F(q(\mathbf z \mid \mathbf x) \mid\mid  p(\mathbf z\mid \mathbf x))]
+\end{equation}
+%
+The only thing we really did w.r.t.~Eq.~\eqref{eqn:DKL} was to replace the forward KL divergence with the Fisher divergence.  If we were able to minimize that loss, we would learn the score function of the posterior $s = \nabla_\bz \log q(\bz \mid \bx)$, which gives us access to an energy-based model of the posterior.
+%
+An immediate challenge for this approach is that the score function of the true posterior $p(\bz \mid \bx)$ is not known.  
+
+\medskip
+
+We can make however use of the following general observation.  Let us consider a noisy target model, where the implicit distribution $q(\bz)$ got convolved with some noise distribution $p(\tilde \bz \mid \bz)$.  
+%
+\begin{equation}
+p(\tilde{\mathbf{z}})=\int d\bz\; p(\tilde{\mathbf{z}} \mid \mathbf{z}) q(\mathbf{z})\;.
+\end{equation}
+%
+A typical example is $\tilde \bz = \bz + \boldsymbol\epsilon$, where $\boldsymbol \epsilon \sim \mathcal{N}(0, \sigma^2 \mathbb{1})$. In that case, the conditional noise distribution and its score function are tractable, $p(\tilde \bz \mid \bz) = \mathcal{N}(\tilde \bz; \bz, \sigma^2 \mathbb{1})$.
+
+Importantly, one can now show, using integration by parts and re-arranging terms that are not directly dependent on $\phi$, that the Fisher divergence between the noisy target and a variational approximator is given by
+%
+\begin{equation}
+\begin{aligned}
+D_F\left(p(\tilde{\mathbf{z}}) \| q_{\phi}(\tilde{\mathbf{z}})\right) & =\mathbb{E}_{p(\tilde{\mathbf{z}})}\left[\frac{1}{2}\left\|\nabla_{\mathbf{z}} \log p(\tilde{\mathbf{z}})-\nabla_{\mathbf{z}} \log q_{\phi}(\tilde{\mathbf{z}})\right\|_2^2\right] \\
+& =\mathbb{E}_{p(\tilde \bz \mid \bz) q(\mathbf{z} )}\left[\frac{1}{2}\left\|\nabla_{\mathbf{z}} \log p(\tilde{\mathbf{z}} \mid \mathbf{z})-\nabla_{\mathbf{z}} \log q_{\phi}(\tilde{\mathbf{z}})\right\|_2^2\right]+\text { constant }\;.
+\end{aligned}
+\end{equation}
+%
+In the last step, the intractable gradient $\nabla_\bx \log p(\tilde \bx)$ got replaced by the tractable gradient of $\nabla_\bx \log p(\tilde \bx \mid \bx)$.  Samples are jointly performed over the noisy-free and the noisy distribution.
+
+\medskip
+
+Using the above relation, we can now formulate a target for estimating the (score of the) posterior $p(\bz \mid \bx)$ with denoising score matching. We do this by replacing all distributions in the above equations by data-conditioned distributions, and averaging over data relatizations.
+%
+\begin{equation}
+    \mathcal{L} = 
+    \bbE_{p(\tilde \bz \mid \bz) p(\bx \mid \bz) p(\bz)}
+    \left[
+    \frac12
+\left\|\nabla_{\mathbf{z}} \log p(\tilde{\mathbf{z}} \mid \mathbf{z})-\nabla_{\mathbf{z}} \log q_{\phi}(\tilde{\mathbf{z}} \mid \bx)\right\|_2^2
+    \right]
+\end{equation}
+%
+Minimizing that loss trains now a the score function of the posterior for the noise-added parameters $\tilde \bz$,
+\begin{equation}
+    \nabla_\bz \log q_\phi(\tilde \bz \mid \bx)
+    \approx
+    \nabla_\bz \log p(\tilde \bz \mid \bx)
+\end{equation}
+%
+In the limit of small enough noise variance $\sigma^2$, the resulting score function will reasonably well approximate the true posterior score.
+
+\medskip
+
+Some additional observations.
+\begin{itemize}
+    \item One can show that the above optimization target becomes high variance in the limit of small $\sigma$.
+    \item In contrast to neural ratio estimation, there are no constraints on the partition function $Z$.
+    \item ...
+\end{itemize}
+
+\subsubsection{Diffusion Denoising Probabilistc Models}
+
+\begin{equation}
+\mathrm{d} \mathbf{x}_t=-\frac{1}{2} \beta(t) \mathbf{x}_t \mathrm{~d} t+\sqrt{\beta(t)} \mathrm{d} \boldsymbol{\omega}_t
+\end{equation}
+
+\begin{equation}
+q_t\left(\mathbf{x}_t \mid \mathbf{x}_0\right)=\mathcal{N}\left(\mathbf{x}_t ; \gamma_t \mathbf{x}_0, \sigma_t^2 \mathbf{I}\right)
+\end{equation}
+
+\begin{equation}
+\mathrm{d} \mathbf{x}_t=\left[-\frac{1}{2} \beta(t) \mathbf{x}_t-\beta(t) \nabla_{\mathbf{x}_t} \log q_t\left(\mathbf{x}_t\right)\right] \mathrm{d} t+\sqrt{\beta(t)} \mathrm{d} \overline{\boldsymbol{\omega}}_t
+\end{equation}
+
+\begin{equation}
+\mathcal{L}[\boldsymbol{\theta}] =
+\mathbb{E}_{t \sim \mathcal{U}(0, T)} \mathbb{E}_{\mathbf{x}_0 \sim q_0\left(\mathbf{x}_0\right)} \mathbb{E}_{\mathbf{x}_t \sim q_t\left(\mathbf{x}_t \mid \mathbf{x}_0\right)}\left\|\mathbf{s}_{\boldsymbol{\theta}}\left(\mathbf{x}_t, t\right)-\nabla_{\mathbf{x}_t} \log q_t\left(\mathbf{x}_t \mid \mathbf{x}_0\right)\right\|_2^2
+\end{equation}
+
+\begin{equation}
+    \mathcal{L}[\boldsymbol{\theta}] =
+    \mathbb{E}_{t \sim \mathcal{U}(0, T)} \mathbb{E}_{\mathbf{x}_0 \sim q_0\left(\mathbf{x}_0\right)} \mathbb{E}_{\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})} \frac{1}{\sigma_t^2}\left\|\boldsymbol{\epsilon}-\boldsymbol{\epsilon}_{\boldsymbol{\theta}}\left(\mathbf{x}_t, t\right)\right\|_2^2
+\end{equation}

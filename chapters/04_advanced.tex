@@ -114,7 +114,7 @@ A third strategy encompasses everything where the Bayesian update rule itself is
 where $\ell(\btheta, \bx)$ is chosen to reduce the impact of misspecification.  Examples include tempered likelihoods, but also (in the broad sense that we adopt here) the analysis of denoised data.  In general, however, such updates would asymptotically concentrate at the loss-risk minimiser $\btheta_\ell^\dagger=\arg\min_\theta \mathbb{E}_{p_0}[\ell(\theta,X)]$, which typically differs from both $\btheta^\ast$ and the KL pseudo-true value.   Posterior uncertainty is not automatically calibrated unless $\ell$ is correctly scaled, and only special choices yield desirable asymptotic behaviour.
 
 \medskip
-These three approaches correspond to modifying the simulator, the representation, or the update rule.  In the remainder of this section we focus on \emph{robust summary learning}, which may offer the most principled path to asymptotic correctness.
+These three approaches respectively correspond to modifying the simulator, the representation, or the posterior update rule.  In the remainder of this section we focus on \emph{robust summary learning}, which may offer the most principled path to asymptotic correctness.
 
 
 \subsection{Robust Summary Learning}
@@ -218,6 +218,12 @@ This quantity captures how much additional information about the summary \(T(\bx
 
 \subsubsection{The Simulator Bias Identity}
 
+\begin{figure}[t]
+    \includegraphics[width=\linewidth]{figures/Venn2.pdf}
+    \caption{Different contributions to inference bias visualised.}
+    \label{fig:venn_simulator_bias_identity}
+\end{figure}
+
 All of the mutual-information–based bias measures introduced above can be unified in a single quantity that captures the total dependence of the inference process on the simulator configuration \(\bgamma\). This is the mutual information between the summarized simulator outputs \((\btheta, T_\phi(\bx))\) and the configuration \(\bgamma\), given by
 %
 \begin{equation}
@@ -250,6 +256,8 @@ and it quantifies the overall bias induced by varying simulator configurations. 
 which follows directly from the chain rule of mutual information. For a fixed summary map \(T_\phi(\bx)\), each term quantifies a different way in which the simulator configuration \(\bgamma\) can influence the inference problem. The identity therefore shows how summary, posterior, prior, and likelihood biases decompose the \emph{simulator bias}—the total dependence of the inference pipeline on \(\bgamma\).
 
 A key consequence is that an upper bound on the likelihood bias automatically bounds both the summary and posterior bias. Since we assume that \(\btheta\) and \(\bgamma\) are independent a priori, the prior bias term vanishes. Thus, enforcing a sufficiently small likelihood bias is enough to suppress all remaining forms of configuration-induced bias.
+
+\cw{TODO: Explain figure and add caption} This is shown in Fig.~\ref{fig:venn_simulator_bias_identity}.
 
 
 \subsubsection{Constrained Optimisation for Robust Minimal Summaries}
