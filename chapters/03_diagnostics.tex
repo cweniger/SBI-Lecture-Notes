@@ -90,7 +90,7 @@ Instead, a clockmaker works iteratively: start with the main gear system, verify
 
 \medskip
 
-The same principle applies to SBI. The diagnostic methods in Sections~\ref{sec:diag:reference}--\ref{sec:diag:misspec} are designed to identify specific failures in \textit{nearly-working} systems. Applied to completely broken pipelines, they generate noise. Applied to incrementally refined systems, they can pinpoint exactly what is wrong.
+The same principle applies to SBI. The diagnostic methods that we discuss in Sections~\ref{sec:diag:reference}--\ref{sec:diag:misspec} are designed to identify specific failures in \textit{nearly-working} systems. Applied to completely broken pipelines, they generate noise. Applied to incrementally refined systems, they can pinpoint exactly what is wrong.
 
 \cw{TODO: Polish the below list}
 
@@ -920,6 +920,14 @@ It is instructive to consider the large samples limit, where $L \gg 1$ and the n
 \end{equation}
 %
 Different ordering functions give rise to the different tests. Examples include $f(\btheta, \bx) = q_\phi(\btheta \mid \bx)$, which tests the average mass in the HPDRs defined by the learned posterior, or $f(\btheta, \bx) = \pi(\btheta \mid \bx)$, which tests the average mass in the HPDRs of the true posterior. But the intuition provided by Eq.~\eqref{eqn:general_rank_diagnostic_result} also opens up the possibility to define new targeted tests for specific inference tasks.
+
+\cw{Fix above equation}
+
+\cw{something like: TARP can be viewed as simulation-based calibration applied to a randomized family of ordering functions. This substantially increases sensitivity to joint and geometric distortions compared to fixed orderings, but—like SBC—remains a rank-based diagnostic and is therefore not sufficient to certify posterior correctness.
+}
+
+\cw{TARP can be viewed as simulation-based calibration applied to a randomized family of ordering functions. While this increases sensitivity to certain joint distortions, it also averages over many distinct rank tests, making the effective weighting over parameter space implicit and difficult to interpret. As a result, TARP may be less informative than targeted SBC diagnostics when the goal is to understand the nature of posterior discrepancies rather than merely detect them.}
+
 
 
 \paragraph{Completeness Guarantees}
