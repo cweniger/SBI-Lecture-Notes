@@ -6,8 +6,8 @@ import matplotlib.gridspec as gridspec
 np.random.seed(42)
 
 # --- Configuration ---
-TARGETS = np.array([-7.0, 3.0, 7.0]) 
-T_MAX = 9.0 
+TARGETS = np.array([-7.0, 3.0, 7.0])
+T_MAX = 0.99  # Flow Matching standard is t in [0, 1]
 L_TRAJECTORIES = 32
 TIME_STEPS = 2000
 
@@ -20,66 +20,79 @@ C_NEUTRAL = np.array(to_rgb("#d9d9d9")) # Light Gray
 TARGET_COLORS = [C_LEFT, C_MID, C_RIGHT]
 TARGET_NAMES = ["Mode A", "Mode B", "Mode C"]
 
-# --- Physics ---
-def alpha(t): return np.exp(-t)
-def get_mean_var(x0, t): return x0 * np.sqrt(alpha(t)), 1.0 - alpha(t)
+# --- Physics: Optimal Transport Flow Matching ---
+# Path: x_t = (1-t)*x_0 + t*x_1
+# If x_0 ~ N(0,1), then x_t ~ N(t*x_1, (1-t)^2)
 
-def get_atomic_drift(x, t, target):
-    var = 1.0 - alpha(t)
-    var = np.maximum(var, 1e-4)
-    mean_atomic = target * np.sqrt(alpha(t))
-    score_atomic = -(x - mean_atomic) / var
-    drift = -0.5*x - score_atomic
-    return drift
+def get_mean_std(target, t):
+    # Mean moves linearly from 0 to target
+    mean = t * target
+    # Std shrinks linearly from 1 to 0
+    std = (1 - t)
+    return mean, std
 
-def get_weights_and_drift(x, t, targets):
-    _, var = get_mean_var(0, t)
-    var = np.maximum(var, 1e-4)
-    
-    # Weights
-    mus = targets[:, np.newaxis] * np.sqrt(alpha(t))
-    lps = -0.5 * ((x - mus)**2) / var
+def get_atomic_velocity(x, t, target):
+    """Velocity for a single target."""
+    t = np.minimum(t, 0.999)  # Singularity guard
+    # v_t(x|x_1) = (x_1 - x) / (1 - t)
+    velocity = (target - x) / (1 - t)
+    return velocity
+
+def get_weights_and_velocity(x, t, targets):
+    """Velocity for a mixture of targets."""
+    t = np.minimum(t, 0.999)  # Singularity guard
+
+    # 1. Weights (Posterior Probability)
+    # We compare densities of N(t*x_i, (1-t)^2)
+    means = t * targets[:, np.newaxis]
+    var = (1 - t)**2
+
+    # Log-likelihoods
+    lps = -0.5 * ((x - means)**2) / var
     max_lp = np.max(lps, axis=0)
     exps = np.exp(lps - max_lp)
-    weights = exps / np.sum(exps, axis=0)
-    
-    # Drift
-    means_atomic = targets[:, np.newaxis] * np.sqrt(alpha(t))
-    scores_atomic = -(x - means_atomic) / var
-    score_mix = np.sum(weights * scores_atomic, axis=0)
-    drift = -0.5*x - score_mix
-    
-    return drift, weights
+    weights = exps / np.sum(exps, axis=0)  # Shape: (N_targets, N_x)
+
+    # 2. Conditional Velocities
+    # v_t(x|x_1) = (x_1 - x) / (1 - t)
+    targets_broad = targets[:, np.newaxis]
+    velocities_atomic = (targets_broad - x) / (1 - t)
+
+    # 3. Marginal Velocity (Expected Velocity)
+    velocity_mix = np.sum(weights * velocities_atomic, axis=0)
+
+    return velocity_mix, weights
 
 def get_arrow_color(weights):
-    mix = (weights[0] * C_LEFT + 
-           weights[1] * C_MID + 
+    mix = (weights[0] * C_LEFT +
+           weights[1] * C_MID +
            weights[2] * C_RIGHT)
-    
+
     w_max = np.max(weights)
     confidence = (w_max - (1/3)) / (2/3)
     confidence = np.clip(confidence, 0, 1)
-    confidence = confidence ** 2 
-    
+    confidence = confidence ** 2
+
     final_color = confidence * mix + (1 - confidence) * C_NEUTRAL
     return final_color
 
-# --- Simulation ---
+# --- Simulation (ODE Integration - Deterministic) ---
 def simulate(targets_to_use):
     dt = T_MAX / TIME_STEPS
     x = np.random.randn(L_TRAJECTORIES)
     trajs = [x.copy()]
-    ts = np.linspace(T_MAX, 0, TIME_STEPS)
-    
+    ts = np.linspace(0, T_MAX, TIME_STEPS)
+
     for t in ts:
-        if t < 1e-3: break
-        
+        if t >= 0.995: break  # Stop just before singularity
+
         if len(targets_to_use) == 1:
-            d = get_atomic_drift(x, t, targets_to_use[0])
+            v = get_atomic_velocity(x, t, targets_to_use[0])
         else:
-            d, _ = get_weights_and_drift(x, t, targets_to_use)
-            
-        x = x - d*dt + np.random.randn(L_TRAJECTORIES)*np.sqrt(dt)
+            v, _ = get_weights_and_velocity(x, t, targets_to_use)
+
+        # Euler Update: x_new = x + v * dt (Deterministic ODE!)
+        x = x + v * dt
         trajs.append(x.copy())
     return np.array(trajs), ts
 
@@ -95,26 +108,25 @@ def plot_panel(ax, targets_to_use, panel_color, title, show_y_label=False):
 
     for i in range(T_mesh.shape[0]):
         for j in range(T_mesh.shape[1]):
-            tau = T_mesh[i,j]
-            t_phys = max(T_MAX - tau, 0.01)
+            t_val = T_mesh[i,j]
             x = X_mesh[i,j]
-            
+
             if len(targets_to_use) == 1:
-                drift = get_atomic_drift(np.array([x]), t_phys, targets_to_use[0])
+                velocity = get_atomic_velocity(np.array([x]), t_val, targets_to_use[0])
                 rgb = panel_color
             else:
-                drift, w_vec = get_weights_and_drift(np.array([x]), t_phys, targets_to_use)
+                velocity, w_vec = get_weights_and_velocity(np.array([x]), t_val, targets_to_use)
                 rgb = get_arrow_color(w_vec[:, 0])
 
             U.append(1.0)
-            V.append(-drift[0])
+            V.append(velocity[0])
             Colors.append(rgb)
 
-    U = np.array(U).reshape(T_mesh.shape)*3
+    U = np.array(U).reshape(T_mesh.shape)*10
     V = np.array(V).reshape(T_mesh.shape)
-    
+
     if len(targets_to_use) == 1:
-        Colors = panel_color 
+        Colors = panel_color
     else:
         Colors = np.array(Colors).reshape(T_mesh.shape[0]*T_mesh.shape[1], 3)
 
@@ -129,9 +141,8 @@ def plot_panel(ax, targets_to_use, panel_color, title, show_y_label=False):
     # 3. Trajectories (All Black)
     trajs, ts = simulate(targets_to_use)
     plot_times = np.linspace(0, T_MAX, len(trajs))
-    
+
     for i in range(L_TRAJECTORIES):
-        # Using black with transparency for density effect
         ax.plot(plot_times, trajs[:, i], color='black', alpha=0.60, linewidth=0.8)
 
     ax.text(0.05, 0.95, title, transform=ax.transAxes, fontsize=8,
@@ -140,23 +151,21 @@ def plot_panel(ax, targets_to_use, panel_color, title, show_y_label=False):
             zorder=30)
     ax.set_xlim(0, T_MAX)
     ax.set_ylim(-9, 9)
-    ax.set_xlabel(r"Generation time $\tau$", fontsize=8)
+    ax.set_xlabel("Time $t$", fontsize=8)
     ax.tick_params(axis='both', which='major', labelsize=8)
-    
+
     if show_y_label:
         ax.set_ylabel(r"Parameter $\theta$", fontsize=8)
     else:
         ax.set_yticklabels([])
-    
+
     # Add Target Marker
     for t_val in targets_to_use:
         ax.scatter([T_MAX], [t_val], color='black', s=30, zorder=20, marker='x')
 
 # --- Main Plot Setup ---
-# A4 width is ~8.27 in. Margins reduce this. 6.2 is a safe content width.
 fig = plt.figure(figsize=(6.3, 2.2))
 
-# Snug fit: reduce wspace
 gs = gridspec.GridSpec(1, 4, width_ratios=[1, 1, 1, 1], wspace=0.05,
                        left=0.08, right=0.99, bottom=0.22, top=0.95)
 
@@ -176,6 +185,5 @@ plot_panel(ax3, np.array([TARGETS[2]]), C_RIGHT, TARGET_NAMES[2])
 ax4 = fig.add_subplot(gs[0, 3])
 plot_panel(ax4, TARGETS, C_NEUTRAL, "Mixture")
 
-#plt.suptitle("Additive Diffusion: The Global Field is the Sum of Atomic Fields", fontsize=12, y=0.98)
-plt.savefig('figures/fig_diffusion_1dim.pdf', format='pdf', bbox_inches='tight')
+plt.savefig('figures/fig_flow_1dim.pdf', format='pdf', bbox_inches='tight')
 #plt.show()
